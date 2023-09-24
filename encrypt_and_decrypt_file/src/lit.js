@@ -17,7 +17,24 @@ const accessControlConditions = [
     },
   },
 ];
-
+/*
+// Must hold at least one Pudgy Penguine NFT 
+const accessControlConditionsNFT = [
+    {
+      contractAddress: '0xBd3531dA5CF5857e7CfAA92426877b022e612cf8',
+      standardContractType: 'ERC721',
+      chain,
+      method: 'balanceOf',
+      parameters: [
+        ':userAddress'
+      ],
+      returnValueTest: {
+        comparator: '>',
+        value: '0'
+      }
+    }
+  ]
+*/
 class Lit {
   litNodeClient;
 
