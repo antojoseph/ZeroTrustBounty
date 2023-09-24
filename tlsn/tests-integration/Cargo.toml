@@ -1,0 +1,21 @@
+[package]
+name = "tests-integration"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dev-dependencies]
+tlsn-tls-core.workspace = true
+tlsn-prover.workspace = true
+tlsn-notary.workspace = true
+tls-server-fixture.workspace = true
+
+p256 = { workspace = true, features = ["ecdsa"] }
+hyper = { workspace = true, features = ["client", "http1"] }
+
+futures.workspace = true
+tokio = { workspace = true, features = ["rt", "rt-multi-thread", "macros"] }
+tokio-util.workspace = true
+
+tracing.workspace = true
+tracing-subscriber.workspace = true
