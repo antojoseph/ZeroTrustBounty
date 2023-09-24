@@ -1,0 +1,97 @@
+-------------------------------------------------------------------
+Successfully verified that the bytes below came from a session with Dns("raw.githubusercontent.com") at 2023-09-24 09:16:47 UTC.
+Note that the bytes which the Prover chose not to disclose are shown as X.
+
+Bytes sent:
+
+GET /antojoseph/hackme/main/src/EtherStore.sol HTTP/1.1
+host: raw.githubusercontent.com
+accept: */*
+accept-encoding: identity
+connection: close
+user-agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36
+content-length: 25
+
+<script>alert(1)</script>
+Bytes received:
+
+HTTP/1.1 200 OK
+Connection: close
+Content-Length: 1459
+Cache-Control: max-age=300
+Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; sandbox
+Content-Type: text/plain; charset=utf-8
+ETag: "a18f67cb4513c967e1e369473cb74b567b351cbfdcba05005240871e03fae33e"
+Strict-Transport-Security: max-age=31536000
+X-Content-Type-Options: nosniff
+X-Frame-Options: deny
+X-XSS-Protection: 1; mode=block
+X-GitHub-Request-Id: 7FF6:3982:28C58D:3367B9:650FFE7E
+Accept-Ranges: bytes
+Date: Sun, 24 Sep 2023 09:16:53 GMT
+Via: 1.1 varnish
+X-Served-By: cache-lga21969-LGA
+X-Cache: MISS
+X-Cache-Hits: 0
+X-Timer: S1695547013.965328,VS0,VE77
+Vary: Authorization,Accept-Encoding,Origin
+Access-Control-Allow-Origin: *
+Cross-Origin-Resource-Policy: cross-origin
+X-Fastly-Request-ID: 862d7b74c32c567db269c6d183f48eced7a63720
+Expires: Sun, 24 Sep 2023 09:21:53 GMT
+Source-Age: 0
+
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.13;
+
+/*
+EtherStore is a contract where you can deposit and withdraw ETH.
+This contract is vulnerable to re-entrancy attack.
+Let's see why.
+
+1. Deploy EtherStore
+2. Deposit 1 Ether each from Account 1 (Alice) and Account 2 (Bob) into EtherStore
+3. Deploy Attack with address of EtherStore
+4. Call Attack.attack sending 1 ether (using Account 3 (Eve)).
+   You will get 3 Ethers back (2 Ether stolen from Alice and Bob,
+   plus 1 Ether sent from this contract).
+
+What happened?
+Attack was able to call EtherStore.withdraw multiple times before
+EtherStore.withdraw finished executing.
+
+Here is how the functions were called
+- Attack.attack
+- EtherStore.deposit
+- EtherStore.withdraw
+- Attack fallback (receives 1 Ether)
+- EtherStore.withdraw
+- Attack.fallback (receives 1 Ether)
+- EtherStore.withdraw
+- Attack fallback (receives 1 Ether)
+*/
+
+contract EtherStore {
+    mapping(address => uint) public balances;
+
+    function deposit() public payable {
+        balances[msg.sender] += msg.value;
+    }
+
+    function withdraw() public {
+        uint bal = balances[msg.sender];
+        require(bal > 0);
+
+        (bool sent, ) = msg.sender.call{value: bal}("");
+        require(sent, "Failed to send Ether");
+
+        balances[msg.sender] = 0;
+    }
+
+    // Helper function to check the balance of this contract
+    function getBalance() public view returns (uint) {
+        return address(this).balance;
+    }
+}
+
+-------------------------------------------------------------------
