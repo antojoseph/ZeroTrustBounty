@@ -1,5 +1,7 @@
 import { prisma } from "@/lib/prisma";
 
+export const dynamic = "force-dynamic";
+
 async function getLeaderboard() {
   const researchers = await prisma.user.findMany({
     where: { role: "researcher" },

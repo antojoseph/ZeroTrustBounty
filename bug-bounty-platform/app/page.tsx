@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 
+export const dynamic = "force-dynamic";
+
 async function getStats() {
   const [programs, reports, researchers, totalPaid] = await Promise.all([
     prisma.program.count({ where: { status: "active" } }),
