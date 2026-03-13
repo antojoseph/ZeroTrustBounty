@@ -1,0 +1,8 @@
+# TLSNotary Bridge – Python dependencies
+# The bridge uses only the standard library by default (no external deps needed).
+# Flask is listed as an optional alternative if you want hot-reload / richer routing:
+#   pip install flask
+#   Then swap BaseHTTPRequestHandler for Flask in tlsnotary_bridge.py
+
+# Standard library modules used (no install needed):
+#   http.server, json, threading, subprocess, pathlib, tempfile, uuid, argparse

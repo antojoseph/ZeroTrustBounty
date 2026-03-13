@@ -1,0 +1,47 @@
+plugins {
+    id 'java'
+}
+
+group   = 'com.zerotrust'
+version = '1.0.0'
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_11
+    targetCompatibility = JavaVersion.VERSION_11
+}
+
+repositories {
+    mavenCentral()
+    // PortSwigger publishes the Montoya API to Maven Central
+    // https://central.sonatype.com/artifact/net.portswigger.burp.extensions/montoya-api
+}
+
+dependencies {
+    // Montoya API – provided at runtime by BurpSuite itself.
+    // We compile against it but do NOT bundle it in the output JAR.
+    compileOnly 'net.portswigger.burp.extensions:montoya-api:2023.12.1'
+}
+
+jar {
+    manifest {
+        attributes(
+            'Extension-Class': 'com.zerotrust.tlsnotary.TLSNotaryExtension',
+            'Implementation-Title': 'TLSNotary Proof Generator',
+            'Implementation-Version': project.version
+        )
+    }
+    // Fat JAR is not needed because we have no runtime dependencies other than
+    // the Montoya API (which BurpSuite provides).
+    archiveFileName = "tlsnotary-burp-extension-${project.version}.jar"
+}
+
+// Convenience task: build and copy the JAR to the project root for easy loading
+task deployToRoot(type: Copy, dependsOn: jar) {
+    from jar.archiveFile
+    into project.rootDir
+    rename { 'tlsnotary-burp-extension.jar' }
+    doLast {
+        println "Extension JAR copied to: ${project.rootDir}/tlsnotary-burp-extension.jar"
+        println "Load it in BurpSuite: Extensions → Add → Java → select the JAR"
+    }
+}
