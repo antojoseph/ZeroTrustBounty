@@ -54,7 +54,7 @@ burpsuite-tlsnotary-extension/
 | Component | Requirement |
 |-----------|-------------|
 | BurpSuite | Professional or Community ≥ 2023.x (Montoya API) |
-| Java | JDK 11+ (for building); BurpSuite ships its own JRE |
+| Java | JDK 17+ (for building); BurpSuite ships its own JRE |
 | Python | 3.8+ (for the bridge service) |
 | Rust / Cargo | For building the TLSNotary prover binary |
 | TLSNotary notary server | Running instance (see below) |

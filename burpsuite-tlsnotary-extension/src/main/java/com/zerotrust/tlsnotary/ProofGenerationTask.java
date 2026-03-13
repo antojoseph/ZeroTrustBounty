@@ -7,6 +7,9 @@ import burp.api.montoya.http.message.responses.HttpResponse;
 import burp.api.montoya.logging.Logging;
 
 import javax.swing.*;
+import java.awt.BorderLayout;
+import java.awt.Dimension;
+import java.awt.Font;
 import java.io.*;
 import java.net.HttpURLConnection;
 import java.net.URL;

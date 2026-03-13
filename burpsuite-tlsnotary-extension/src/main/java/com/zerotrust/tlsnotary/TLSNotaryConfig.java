@@ -1,7 +1,7 @@
 package com.zerotrust.tlsnotary;
 
 import burp.api.montoya.MontoyaApi;
-import burp.api.montoya.persistence.Preferences;
+import burp.api.montoya.persistence.PersistedObject;
 
 /**
  * Persisted configuration for the TLSNotary extension.
@@ -28,7 +28,7 @@ public class TLSNotaryConfig {
     public static final boolean DEFAULT_HIDE_REQUEST    = false;
     public static final int     DEFAULT_TIMEOUT_SECONDS = 120;
 
-    private final Preferences prefs;
+    private final PersistedObject prefs;
 
     public TLSNotaryConfig(MontoyaApi api) {
         this.prefs = api.persistence().extensionData();
