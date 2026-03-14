@@ -31,8 +31,14 @@ docker compose up -d notary api
 
 Defaults:
 
-- TLSNotary API URL: `http://127.0.0.1:8080`
-- If port `8080` is already in use, start Compose with `TLSN_API_PORT=<port>` and run the app with `TLSN_API_URL=http://127.0.0.1:<port>`
+- TLSNotary API URL: `http://127.0.0.1:8090`
+- If port `8090` is already in use, start Compose with `TLSN_API_PORT=<port>` and run the app with `TLSN_API_URL=http://127.0.0.1:<port>`
+
+If a TLSNotary proof hides parts of the HTTP request, the report enters a gated flow:
+
+- The company validates the bug using the verified TLSNotary HTTP response
+- The company confirms a bounty amount to unlock the next step
+- The reporter reveals the full request, and the app checks that it still matches the original proof outside the hidden sections
 
 ## Local database
 

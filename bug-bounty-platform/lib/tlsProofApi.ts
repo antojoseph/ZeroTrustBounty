@@ -1,6 +1,9 @@
-const DEFAULT_TLSN_API_URL = "http://127.0.0.1:8080";
+const DEFAULT_TLSN_API_URLS = [
+  "http://127.0.0.1:8090",
+] as const;
 
 export interface VerifiedTlsPresentation {
+  attestationFingerprint: string;
   serverName: string;
   sessionTime: string;
   sentData: string;
@@ -12,6 +15,7 @@ export interface VerifiedTlsPresentation {
 interface VerifyTlsPresentationApiResponse {
   status: string;
   file_name?: string | null;
+  attestation_fingerprint: string;
   server_name: string;
   session_time: string;
   sent_data: string;
@@ -35,15 +39,58 @@ export class TlsProofVerificationError extends Error {
   }
 }
 
-export function getTlsnApiUrl() {
-  return process.env.TLSN_API_URL || DEFAULT_TLSN_API_URL;
+export function getTlsnApiUrls() {
+  const configuredUrls = (process.env.TLSN_API_URL || "")
+    .split(",")
+    .map((url) => url.trim())
+    .filter(Boolean);
+
+  if (configuredUrls.length > 0) {
+    return Array.from(new Set(configuredUrls));
+  }
+
+  return [...DEFAULT_TLSN_API_URLS];
 }
 
 export async function verifyTlsPresentationWithApi(
   proof: Buffer,
   originalFileName: string
 ): Promise<VerifiedTlsPresentation> {
-  const response = await fetch(`${getTlsnApiUrl()}/verify`, {
+  const candidateUrls = getTlsnApiUrls();
+  const failures: string[] = [];
+
+  for (const apiUrl of candidateUrls) {
+    try {
+      return await verifyTlsPresentationAtUrl(apiUrl, proof, originalFileName);
+    } catch (error) {
+      if (
+        error instanceof TlsProofVerificationError &&
+        error.statusCode >= 400 &&
+        error.statusCode < 500
+      ) {
+        throw error;
+      }
+
+      failures.push(
+        `${apiUrl}: ${error instanceof Error ? error.message : "Unknown API error"}`
+      );
+    }
+  }
+
+  throw new TlsProofVerificationError(
+    `Failed to reach a working TLSNotary API. Tried ${candidateUrls.join(", ")}. ${failures.join(
+      " | "
+    )}`,
+    500
+  );
+}
+
+async function verifyTlsPresentationAtUrl(
+  apiUrl: string,
+  proof: Buffer,
+  originalFileName: string
+) {
+  const response = await fetch(`${apiUrl}/verify`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -55,20 +102,24 @@ export async function verifyTlsPresentationWithApi(
     cache: "no-store",
   }).catch((error: unknown) => {
     throw new TlsProofVerificationError(
-      error instanceof Error ? error.message : "Failed to reach the TLSNotary API",
+      `Failed to reach the TLSNotary API at ${apiUrl}: ${
+        error instanceof Error ? error.message : "unknown fetch error"
+      }`,
       500
     );
   });
 
-  const payload = (await response
-    .json()
-    .catch(() => null)) as VerifyTlsPresentationApiResponse | VerifyTlsPresentationApiError | null;
+  const payload = (await response.json().catch(() => null)) as
+    | VerifyTlsPresentationApiResponse
+    | VerifyTlsPresentationApiError
+    | null;
 
   if (!response.ok) {
     const details =
       payload && "details" in payload && typeof payload.details === "string"
         ? payload.details
-        : "TLSNotary API verification failed";
+        : `TLSNotary API at ${apiUrl} returned HTTP ${response.status}`;
+
     throw new TlsProofVerificationError(
       details,
       response.status >= 400 && response.status < 500 ? 400 : 500
@@ -77,6 +128,8 @@ export async function verifyTlsPresentationWithApi(
 
   if (
     !payload ||
+    !("attestation_fingerprint" in payload) ||
+    typeof payload.attestation_fingerprint !== "string" ||
     !("server_name" in payload) ||
     typeof payload.server_name !== "string" ||
     typeof payload.session_time !== "string" ||
@@ -86,12 +139,13 @@ export async function verifyTlsPresentationWithApi(
     typeof payload.recv_len !== "number"
   ) {
     throw new TlsProofVerificationError(
-      "TLSNotary API returned an invalid verification payload",
+      `TLSNotary API at ${apiUrl} returned an invalid verification payload`,
       500
     );
   }
 
   return {
+    attestationFingerprint: payload.attestation_fingerprint,
     serverName: payload.server_name,
     sessionTime: payload.session_time,
     sentData: payload.sent_data,

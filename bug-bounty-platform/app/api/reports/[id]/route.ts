@@ -126,8 +126,27 @@ export async function PATCH(
     where: { id },
     data: allowedFields,
     include: {
-      reporter: { select: { username: true, displayName: true } },
-      program: { select: { name: true, slug: true } },
+      reporter: {
+        select: {
+          username: true,
+          displayName: true,
+          reputation: true,
+          avatar: true,
+        },
+      },
+      program: {
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          company: {
+            select: {
+              name: true,
+              userId: true,
+            },
+          },
+        },
+      },
       payment: true,
     },
   });

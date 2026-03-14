@@ -8,6 +8,7 @@ import StatusBadge from "@/components/StatusBadge";
 import TlsProofBadge from "@/components/TlsProofBadge";
 import TlsProofViewer from "@/components/TlsProofViewer";
 import TlsProofUploader from "@/components/TlsProofUploader";
+import TlsProofRevealUploader from "@/components/TlsProofRevealUploader";
 
 interface Report {
   id: string;
@@ -29,6 +30,13 @@ interface Report {
   tlsProofTime: string | null;
   tlsProofSentData: string | null;
   tlsProofRecvData: string | null;
+  tlsProofHasHiddenComponents: boolean;
+  tlsProofRevealState: string | null;
+  tlsProofRevealUnlockedAt: string | null;
+  tlsProofFull: string | null;
+  tlsProofFullFileName: string | null;
+  tlsProofFullSentData: string | null;
+  tlsProofFullRevealedAt: string | null;
   createdAt: string;
   updatedAt: string;
   reporter: { username: string; displayName: string; reputation: number; avatar: string | null };
@@ -74,6 +82,8 @@ export default function ReportDetailPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [showProofUploader, setShowProofUploader] = useState(false);
+  const [proofFlowError, setProofFlowError] = useState("");
+  const [unlockingReveal, setUnlockingReveal] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -94,8 +104,41 @@ export default function ReportDetailPage() {
   }, [id, router]);
 
   const isCompany = currentUser?.role === "company";
-  const isOwner = report?.program.company.userId === currentUser?.id;
+  const isOwner = report?.program.company?.userId === currentUser?.id;
   const isReporter = report?.reporterId === currentUser?.id;
+  const proofHasHiddenComponents = report?.tlsProofHasHiddenComponents ?? false;
+  const revealState = report?.tlsProofRevealState;
+  const reporterCanRevealFullRequest = revealState === "ready_for_reporter_reveal";
+  const fullRequestRevealed = revealState === "revealed";
+
+  const mergeReportUpdate = (update: Partial<Report>) => {
+    setReport((currentReport) =>
+      currentReport
+        ? {
+            ...currentReport,
+            ...update,
+            reporter: update.reporter
+              ? {
+                  ...currentReport.reporter,
+                  ...update.reporter,
+                }
+              : currentReport.reporter,
+            program: update.program
+              ? {
+                  ...currentReport.program,
+                  ...update.program,
+                  company: update.program.company
+                    ? {
+                        ...currentReport.program.company,
+                        ...update.program.company,
+                      }
+                    : currentReport.program.company,
+                }
+              : currentReport.program,
+          }
+        : currentReport
+    );
+  };
 
   const submitComment = async () => {
     if (!comment.trim()) return;
@@ -124,7 +167,7 @@ export default function ReportDetailPage() {
     });
     const data = await res.json();
     if (res.ok) {
-      setReport((r) => r ? { ...r, ...data.report } : r);
+      mergeReportUpdate(data.report);
     } else {
       setError(data.error);
     }
@@ -140,16 +183,56 @@ export default function ReportDetailPage() {
     tlsProofTime: string | null;
     tlsProofSentData: string | null;
     tlsProofRecvData: string | null;
+    tlsProofHasHiddenComponents: boolean;
+    tlsProofRevealState: string | null;
+    tlsProofRevealUnlockedAt: string | null;
+    tlsProofFull: string | null;
+    tlsProofFullFileName: string | null;
+    tlsProofFullSentData: string | null;
+    tlsProofFullRevealedAt: string | null;
   }) => {
-    setReport((r) =>
-      r
-        ? {
-            ...r,
-            ...proofUpdate,
-          }
-        : r
-    );
+    mergeReportUpdate(proofUpdate);
     setShowProofUploader(false);
+    setProofFlowError("");
+  };
+
+  const handleFullProofRevealed = (proofUpdate: {
+    bountyAmount: number | null;
+    tlsProofHasHiddenComponents: boolean;
+    tlsProofRevealState: string | null;
+    tlsProofRevealUnlockedAt: string | null;
+    tlsProofFull: string | null;
+    tlsProofFullFileName: string | null;
+    tlsProofFullSentData: string | null;
+    tlsProofFullRevealedAt: string | null;
+  }) => {
+    mergeReportUpdate(proofUpdate);
+    setProofFlowError("");
+  };
+
+  const unlockFullRequestReveal = async () => {
+    if (!isOwner) return;
+
+    setUnlockingReveal(true);
+    setProofFlowError("");
+
+    const res = await fetch(`/api/reports/${id}/proof-reveal`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ bountyAmount: bountyInput }),
+    });
+    const data = await res.json();
+
+    if (res.ok) {
+      mergeReportUpdate(data.report);
+      if (data.report?.bountyAmount) {
+        setBountyInput(String(data.report.bountyAmount));
+      }
+    } else {
+      setProofFlowError(data.details || data.error || "Failed to unlock request reveal.");
+    }
+
+    setUnlockingReveal(false);
   };
 
   if (loading) {
@@ -216,16 +299,113 @@ export default function ReportDetailPage() {
 
           {/* TLSNotary Proof Section */}
           {report.tlsProofStatus === "verified" ? (
-            <TlsProofViewer
-              serverName={report.tlsProofServerName}
-              sessionTime={report.tlsProofTime}
-              sentData={report.tlsProofSentData}
-              recvData={report.tlsProofRecvData}
-              proofData={report.tlsProof}
-              proofFormat={report.tlsProofFormat}
-              proofFileName={report.tlsProofFileName}
-              hasSignature={report.tlsProofFormat === "presentation_tlsn" ? true : undefined}
-            />
+            <>
+              <TlsProofViewer
+                serverName={report.tlsProofServerName}
+                sessionTime={report.tlsProofTime}
+                sentData={report.tlsProofSentData}
+                fullSentData={report.tlsProofFullSentData}
+                recvData={report.tlsProofRecvData}
+                proofData={report.tlsProof}
+                fullProofData={report.tlsProofFull}
+                proofFormat={report.tlsProofFormat}
+                proofFileName={report.tlsProofFileName}
+                fullProofFileName={report.tlsProofFullFileName}
+                hasSignature={report.tlsProofFormat === "presentation_tlsn" ? true : undefined}
+              />
+
+              {proofHasHiddenComponents && (
+                <div className="bg-amber-950/20 border border-amber-700/40 rounded-xl p-5 space-y-4">
+                  <div>
+                    <h2 className="font-bold text-amber-300 text-sm">
+                      Redacted Request Reveal Flow
+                    </h2>
+                    <p className="text-sm text-amber-100/80 mt-1 leading-relaxed">
+                      This TLSNotary proof hides part of the HTTP request. The company should
+                      validate the bug using the cryptographically verified HTTP response above
+                      and confirm a payout amount before the full request is revealed.
+                    </p>
+                  </div>
+
+                  {proofFlowError && (
+                    <div className="text-xs bg-red-900/30 border border-red-700/50 rounded-lg p-3 text-red-300">
+                      {proofFlowError}
+                    </div>
+                  )}
+
+                  {revealState === "awaiting_company_confirmation" && (
+                    <div className="text-sm text-gray-300">
+                      {isOwner ? (
+                        <p>
+                          Set a bounty amount in the triage controls and use the unlock action to
+                          let the reporter upload the matching full TLSNotary presentation.
+                        </p>
+                      ) : isReporter ? (
+                        <p>
+                          The company has the verified TLSNotary response. Once it confirms the
+                          bounty amount, you will be able to upload the companion full presentation here.
+                        </p>
+                      ) : (
+                        <p>
+                          The company must confirm the bug and bounty amount before the reporter
+                          can reveal the hidden request details with the companion full presentation.
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {revealState === "ready_for_reporter_reveal" && (
+                    <div className="space-y-3">
+                      <div className="rounded-lg border border-amber-700/40 bg-amber-950/10 p-3 text-sm text-amber-100/90">
+                        <p>
+                          The company has confirmed the bug and locked in a bounty amount of{" "}
+                          <span className="font-semibold text-amber-200">
+                            ${report.bountyAmount?.toLocaleString() ?? "0"}
+                          </span>
+                          . The reporter can now reveal the full request.
+                        </p>
+                        {report.tlsProofRevealUnlockedAt && (
+                          <p className="text-xs text-amber-200/70 mt-1">
+                            Unlocked on {new Date(report.tlsProofRevealUnlockedAt).toLocaleString()}
+                          </p>
+                        )}
+                      </div>
+
+                      {isReporter ? (
+                        <div className="space-y-3">
+                          <div className="text-xs text-amber-200/80">
+                            Upload the companion full TLSNotary presentation that was generated
+                            from the same session as the redacted proof. The platform will match
+                            the two proofs directly instead of asking you to paste raw request text.
+                          </div>
+                          <TlsProofRevealUploader
+                            reportId={report.id}
+                            onProofRevealed={handleFullProofRevealed}
+                          />
+                        </div>
+                      ) : (
+                        <p className="text-sm text-gray-300">
+                          Waiting for the reporter to upload the matching full TLSNotary presentation.
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {fullRequestRevealed && report.tlsProofFullSentData && (
+                    <div className="rounded-lg border border-green-700/40 bg-green-950/10 p-3 text-sm text-green-200">
+                      The reporter has uploaded a matching full TLSNotary presentation from the
+                      same notarized session, and the platform confirmed that it reveals the
+                      original request behind the redacted proof.
+                      {report.tlsProofFullRevealedAt && (
+                        <span className="block text-xs text-green-300/70 mt-1">
+                          Revealed on {new Date(report.tlsProofFullRevealedAt).toLocaleString()}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
           ) : (
             <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
               <div className="flex items-center justify-between mb-2">
@@ -406,6 +586,18 @@ export default function ReportDetailPage() {
                     </p>
                   </div>
                 )}
+                {proofHasHiddenComponents && (
+                  <div>
+                    <span className="text-gray-500">Request Visibility</span>
+                    <p className="text-amber-300 mt-0.5">
+                      Hidden sections present
+                    </p>
+                    <p className="text-[11px] text-gray-400 mt-1 leading-relaxed">
+                      The company should validate using the verified response and confirm a bounty
+                      amount before the full request is revealed.
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -449,6 +641,36 @@ export default function ReportDetailPage() {
                 {report.tlsProofStatus === "verified" && (
                   <div className="text-xs bg-green-900/20 border border-green-700/40 rounded-lg p-2 text-green-400">
                     ✓ TLSNotary proof present — PoC is cryptographically verified
+                  </div>
+                )}
+                {proofHasHiddenComponents && revealState === "awaiting_company_confirmation" && (
+                  <div className="rounded-lg border border-amber-700/40 bg-amber-950/10 p-3 text-xs text-amber-100/90 space-y-2">
+                    <p>
+                      This proof hides request components. Confirm the bug using the verified
+                      TLSNotary response and lock in the bounty amount before the reporter reveals
+                      the full request.
+                    </p>
+                    <button
+                      onClick={unlockFullRequestReveal}
+                      disabled={unlockingReveal}
+                      className="w-full bg-amber-400 hover:bg-amber-300 disabled:opacity-50 text-black font-semibold py-2 rounded-lg text-sm transition-colors"
+                    >
+                      {unlockingReveal
+                        ? "Unlocking..."
+                        : "Confirm Amount & Unlock Full Request Reveal"}
+                    </button>
+                  </div>
+                )}
+                {proofHasHiddenComponents && revealState === "ready_for_reporter_reveal" && (
+                  <div className="rounded-lg border border-amber-700/40 bg-amber-950/10 p-3 text-xs text-amber-100/90">
+                    Waiting for the reporter to reveal the full request. Keep validating against
+                    the TLSNotary-verified response until that reveal arrives.
+                  </div>
+                )}
+                {proofHasHiddenComponents && fullRequestRevealed && (
+                  <div className="rounded-lg border border-green-700/40 bg-green-950/10 p-3 text-xs text-green-200">
+                    The full request has been revealed and matched to the original TLSNotary
+                    proof.
                   </div>
                 )}
                 <button
@@ -500,6 +722,18 @@ export default function ReportDetailPage() {
                 <span className="text-gray-500">TLSNotary Proof</span>
                 <TlsProofBadge status={report.tlsProofStatus} />
               </div>
+              {proofHasHiddenComponents && (
+                <div className="flex justify-between items-center gap-3">
+                  <span className="text-gray-500">Request Reveal</span>
+                  <span className="text-right text-amber-300">
+                    {fullRequestRevealed
+                      ? "Revealed"
+                      : revealState === "ready_for_reporter_reveal"
+                        ? "Waiting for reporter"
+                        : "Waiting for company"}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
         </div>

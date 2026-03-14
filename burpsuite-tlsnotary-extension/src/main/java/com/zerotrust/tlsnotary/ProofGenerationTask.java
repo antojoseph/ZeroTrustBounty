@@ -9,8 +9,12 @@ import burp.api.montoya.logging.Logging;
 import javax.swing.*;
 import java.awt.BorderLayout;
 import java.awt.Color;
+import java.awt.Desktop;
 import java.awt.Dimension;
 import java.awt.Font;
+import java.awt.datatransfer.DataFlavor;
+import java.awt.datatransfer.Transferable;
+import java.awt.datatransfer.UnsupportedFlavorException;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
@@ -22,6 +26,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 
@@ -34,6 +39,7 @@ import java.util.List;
  *  5. Shows a result dialog to the user.
  */
 public class ProofGenerationTask implements Runnable {
+    private static final String TLSN_CLIPBOARD_PREFIX = "tlsn-presentation-v1:";
 
     private final MontoyaApi api;
     private final TLSNotaryConfig config;
@@ -80,6 +86,16 @@ public class ProofGenerationTask implements Runnable {
         HttpResponse resp = reqRes.response();
         String apiUrl = config.getApiUrl();
 
+        if (!req.httpService().secure()) {
+            throw new IOException(
+                    "TLSNotary proofs require an HTTPS request. The selected request targets "
+                            + req.httpService().host()
+                            + ":"
+                            + req.httpService().port()
+                            + " over plain HTTP."
+            );
+        }
+
         String payload = buildProofRequestPayload(req, resp);
         logging.logToOutput("Submitting proof request to TLSNotary API: " + apiUrl + "/prove");
         logging.logToOutput("Target: " + req.httpService().host() + ":" + req.httpService().port());
@@ -90,47 +106,71 @@ public class ProofGenerationTask implements Runnable {
     }
 
     private String buildProofRequestPayload(HttpRequest req, HttpResponse resp) {
-        StringBuilder json = new StringBuilder();
-        json.append("{\n");
-        json.append("  \"notary_host\": \"").append(escape(config.getNotaryHost())).append("\",\n");
-        json.append("  \"notary_port\": ").append(config.getNotaryPort()).append(",\n");
-        json.append("  \"ca_cert_path\": \"").append(escape(config.getCaCertPath())).append("\",\n");
-        json.append("  \"timeout_seconds\": ").append(config.getTimeoutSeconds()).append(",\n");
-        json.append("  \"hide_request\": ").append(hideRequest).append(",\n");
-        json.append("  \"target_host\": \"").append(escape(req.httpService().host())).append("\",\n");
-        json.append("  \"target_port\": ").append(req.httpService().port()).append(",\n");
-        json.append("  \"use_tls\": ").append(req.httpService().secure()).append(",\n");
+        List<String> fields = new ArrayList<>();
+
+        if (config.shouldUseNotaryOverrides()) {
+            String notaryHost = config.getNotaryHost().trim();
+            if (!notaryHost.isEmpty()) {
+                fields.add("  \"notary_host\": \"" + escape(notaryHost) + "\"");
+            }
+
+            int notaryPort = config.getNotaryPort();
+            if (notaryPort > 0) {
+                fields.add("  \"notary_port\": " + notaryPort);
+            }
+
+            String caCertPath = config.getCaCertPath().trim();
+            if (!caCertPath.isEmpty()) {
+                fields.add("  \"ca_cert_path\": \"" + escape(caCertPath) + "\"");
+            }
+        }
+
+        fields.add("  \"timeout_seconds\": " + config.getTimeoutSeconds());
+        fields.add("  \"hide_request\": " + hideRequest);
+        fields.add("  \"target_host\": \"" + escape(req.httpService().host()) + "\"");
+        fields.add("  \"target_port\": " + req.httpService().port());
+        fields.add("  \"use_tls\": " + req.httpService().secure());
 
         byte[] reqBytes = req.toByteArray().getBytes();
-        json.append("  \"request_b64\": \"")
-                .append(Base64.getEncoder().encodeToString(reqBytes))
-                .append("\",\n");
+        fields.add("  \"request_b64\": \"" + Base64.getEncoder().encodeToString(reqBytes) + "\"");
 
         if (resp != null) {
             byte[] respBytes = resp.toByteArray().getBytes();
-            json.append("  \"response_b64\": \"")
-                    .append(Base64.getEncoder().encodeToString(respBytes))
-                    .append("\",\n");
+            fields.add("  \"response_b64\": \"" + Base64.getEncoder().encodeToString(respBytes) + "\"");
         } else {
-            json.append("  \"response_b64\": null,\n");
+            fields.add("  \"response_b64\": null");
         }
 
-        json.append("  \"redaction_rules\": [");
+        StringBuilder redactionRulesJson = new StringBuilder();
+        redactionRulesJson.append("  \"redaction_rules\": [");
         if (redactionRules != null && !redactionRules.isEmpty()) {
             for (int i = 0; i < redactionRules.size(); i++) {
                 RedactionRule rule = redactionRules.get(i);
-                json.append("\n    {\"type\": \"").append(rule.getType().name()).append("\"");
+                redactionRulesJson.append("\n    {\"type\": \"").append(rule.getType().name()).append("\"");
                 if (rule.getValue() != null) {
-                    json.append(", \"value\": \"").append(escape(rule.getValue())).append("\"");
+                    redactionRulesJson.append(", \"value\": \"").append(escape(rule.getValue())).append("\"");
                 }
-                json.append("}");
+                redactionRulesJson.append("}");
                 if (i < redactionRules.size() - 1) {
-                    json.append(",");
+                    redactionRulesJson.append(",");
                 }
             }
-            json.append("\n  ");
+            redactionRulesJson.append("\n  ");
         }
-        json.append("]\n}");
+        redactionRulesJson.append("]");
+        fields.add(redactionRulesJson.toString());
+
+        StringBuilder json = new StringBuilder();
+        json.append("{\n");
+        for (int i = 0; i < fields.size(); i++) {
+            json.append(fields.get(i));
+            if (i < fields.size() - 1) {
+                json.append(",\n");
+            } else {
+                json.append('\n');
+            }
+        }
+        json.append("}");
 
         return json.toString();
     }
@@ -152,6 +192,14 @@ public class ProofGenerationTask implements Runnable {
         result.recvData = requireJsonValue(json, "recv_data");
         result.presentationFileName = requireJsonValue(json, "presentation_file_name");
         result.presentationBase64 = requireJsonValue(json, "presentation_b64");
+        String fullPresentationFileName = extractJsonString(json, "full_presentation_file_name");
+        if (fullPresentationFileName != null && !fullPresentationFileName.isBlank()) {
+            result.fullPresentationFileName = fullPresentationFileName;
+        }
+        String fullPresentationBase64 = extractJsonString(json, "full_presentation_b64");
+        if (fullPresentationBase64 != null && !fullPresentationBase64.isBlank()) {
+            result.fullPresentationBase64 = fullPresentationBase64;
+        }
         result.attestationFileName = requireJsonValue(json, "attestation_file_name");
         result.attestationBase64 = requireJsonValue(json, "attestation_b64");
         result.secretsFileName = requireJsonValue(json, "secrets_file_name");
@@ -170,6 +218,14 @@ public class ProofGenerationTask implements Runnable {
                 result.presentationBase64,
                 "proof.presentation.tlsn"
         );
+        if (result.fullPresentationBase64 != null && !result.fullPresentationBase64.isBlank()) {
+            saved.fullPresentationPath = writeArtifact(
+                    outDir,
+                    result.fullPresentationFileName,
+                    result.fullPresentationBase64,
+                    "proof.full.presentation.tlsn"
+            );
+        }
         saved.attestationPath = writeArtifact(
                 outDir,
                 result.attestationFileName,
@@ -184,6 +240,9 @@ public class ProofGenerationTask implements Runnable {
         );
 
         logging.logToOutput("Presentation saved to: " + saved.presentationPath);
+        if (saved.fullPresentationPath != null) {
+            logging.logToOutput("Full presentation saved to: " + saved.fullPresentationPath);
+        }
         logging.logToOutput("Attestation saved to: " + saved.attestationPath);
         logging.logToOutput("Secrets saved to: " + saved.secretsPath);
 
@@ -234,7 +293,16 @@ public class ProofGenerationTask implements Runnable {
                 sb.append(line).append('\n');
             }
             if (code < 200 || code >= 300) {
-                throw new IOException("TLSNotary API returned HTTP " + code + ": " + sb);
+                String responseBody = sb.toString();
+                String error = extractJsonString(responseBody, "error");
+                String details = extractJsonString(responseBody, "details");
+                if (details != null && !details.isBlank()) {
+                    if (error != null && !error.isBlank()) {
+                        throw new IOException(error + ": " + details);
+                    }
+                    throw new IOException(details);
+                }
+                throw new IOException("TLSNotary API returned HTTP " + code + ": " + responseBody);
             }
             return sb.toString();
         }
@@ -339,15 +407,40 @@ public class ProofGenerationTask implements Runnable {
 
     private void showSuccess(SavedProofFiles savedFiles, ProofGenerationResult result) {
         SwingUtilities.invokeLater(() -> {
-            JPanel panel = new JPanel(new BorderLayout(8, 8));
-            panel.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
+            JDialog dialog = new JDialog((java.awt.Frame) null, "TLSNotary Proof Generated", true);
+            dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
+
+            JPanel panel = new JPanel(new BorderLayout(10, 10));
+            panel.setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
 
             panel.add(new JLabel(
                     "<html><b>TLSNotary proof generated successfully.</b><br>" +
-                    "Presentation: <code>" + savedFiles.presentationPath + "</code><br>" +
-                    "Attestation: <code>" + savedFiles.attestationPath + "</code><br>" +
-                    "Secrets: <code>" + savedFiles.secretsPath + "</code></html>"),
+                    "Artifacts were saved locally and can be reviewed below.</html>"),
                     BorderLayout.NORTH);
+
+            JPanel content = new JPanel(new BorderLayout(8, 8));
+
+            StringBuilder artifactsText = new StringBuilder();
+            artifactsText.append("Presentation:\n").append(savedFiles.presentationPath);
+            if (savedFiles.fullPresentationPath != null) {
+                artifactsText.append("\n\nFull Presentation:\n").append(savedFiles.fullPresentationPath);
+            }
+            artifactsText.append("\n\nAttestation:\n").append(savedFiles.attestationPath)
+                    .append("\n\nSecrets:\n").append(savedFiles.secretsPath);
+
+            JTextArea artifactsArea = new JTextArea(artifactsText.toString());
+            artifactsArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 11));
+            artifactsArea.setEditable(false);
+            artifactsArea.setLineWrap(true);
+            artifactsArea.setWrapStyleWord(false);
+            artifactsArea.setRows(savedFiles.fullPresentationPath != null ? 9 : 7);
+            artifactsArea.setColumns(56);
+            artifactsArea.setCaretPosition(0);
+
+            JScrollPane artifactsScroll = new JScrollPane(artifactsArea);
+            artifactsScroll.setBorder(BorderFactory.createTitledBorder("Artifacts"));
+            artifactsScroll.setPreferredSize(new Dimension(560, 150));
+            content.add(artifactsScroll, BorderLayout.NORTH);
 
             String preview = "Server: " + result.serverName + "\n" +
                     "Session: " + result.sessionTime + "\n\n" +
@@ -357,21 +450,83 @@ public class ProofGenerationTask implements Runnable {
             JTextArea ta = new JTextArea(preview);
             ta.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 11));
             ta.setEditable(false);
-            ta.setRows(16);
-            ta.setColumns(60);
-            panel.add(new JScrollPane(ta), BorderLayout.CENTER);
+            ta.setRows(14);
+            ta.setColumns(56);
+            ta.setCaretPosition(0);
 
-            JButton copyBtn = new JButton("Copy Presentation Path");
+            JScrollPane previewScroll = new JScrollPane(ta);
+            previewScroll.setBorder(BorderFactory.createTitledBorder("Transcript Preview"));
+            previewScroll.setPreferredSize(new Dimension(560, 260));
+            content.add(previewScroll, BorderLayout.CENTER);
+
+            if (savedFiles.fullPresentationPath != null) {
+                JLabel companionHint = new JLabel(
+                        "<html><small>A companion full presentation from the same notarized session was also saved. Use that file if a platform later asks you to reveal the hidden request details.</small></html>"
+                );
+                content.add(companionHint, BorderLayout.SOUTH);
+            }
+
+            panel.add(content, BorderLayout.CENTER);
+
+            JPanel actions = new JPanel(new java.awt.FlowLayout(java.awt.FlowLayout.RIGHT, 8, 0));
+
+            JButton copyBtn = new JButton("Copy Proof to Clipboard");
             copyBtn.addActionListener(e -> {
-                java.awt.Toolkit.getDefaultToolkit()
-                        .getSystemClipboard()
-                        .setContents(new java.awt.datatransfer.StringSelection(savedFiles.presentationPath.toString()), null);
+                copyPresentationToClipboard(savedFiles.presentationPath, result);
+                copyBtn.setText("Proof Copied");
             });
-            panel.add(copyBtn, BorderLayout.SOUTH);
 
-            JOptionPane.showMessageDialog(null, panel,
-                    "TLSNotary Proof Generated", JOptionPane.INFORMATION_MESSAGE);
+            JButton openFolderBtn = new JButton("Open Proof Folder");
+            openFolderBtn.addActionListener(e -> {
+                try {
+                    openProofFolder(savedFiles.presentationPath);
+                } catch (IOException ex) {
+                    showError("Failed to open proof folder: " + ex.getMessage());
+                }
+            });
+
+            JButton closeBtn = new JButton("Close");
+            closeBtn.addActionListener(e -> dialog.dispose());
+
+            actions.add(copyBtn);
+            actions.add(openFolderBtn);
+            actions.add(closeBtn);
+            panel.add(actions, BorderLayout.SOUTH);
+
+            dialog.setContentPane(panel);
+            dialog.pack();
+            dialog.setSize(new Dimension(640, 540));
+            dialog.setMinimumSize(new Dimension(600, 480));
+            dialog.setLocationRelativeTo(null);
+            dialog.setVisible(true);
         });
+    }
+
+    private void copyPresentationToClipboard(Path presentationPath, ProofGenerationResult result) {
+        java.awt.Toolkit.getDefaultToolkit()
+                .getSystemClipboard()
+                .setContents(
+                        new ProofClipboardTransferable(
+                                presentationPath,
+                                result.presentationFileName,
+                                result.presentationBase64
+                        ),
+                        null
+                );
+    }
+
+    private void openProofFolder(Path presentationPath) throws IOException {
+        Path folder = presentationPath.getParent();
+        if (folder == null) {
+            throw new IOException("proof folder could not be resolved");
+        }
+
+        if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.OPEN)) {
+            Desktop.getDesktop().open(folder.toFile());
+            return;
+        }
+
+        new ProcessBuilder("open", folder.toString()).start();
     }
 
     private static String truncateBlock(String text, int maxChars) {
@@ -395,6 +550,8 @@ public class ProofGenerationTask implements Runnable {
         String recvData;
         String presentationFileName;
         String presentationBase64;
+        String fullPresentationFileName;
+        String fullPresentationBase64;
         String attestationFileName;
         String attestationBase64;
         String secretsFileName;
@@ -403,7 +560,55 @@ public class ProofGenerationTask implements Runnable {
 
     private static class SavedProofFiles {
         Path presentationPath;
+        Path fullPresentationPath;
         Path attestationPath;
         Path secretsPath;
+    }
+
+    private static class ProofClipboardTransferable implements Transferable {
+        private static final DataFlavor[] SUPPORTED_FLAVORS = {
+                DataFlavor.javaFileListFlavor,
+                DataFlavor.stringFlavor
+        };
+
+        private final Path presentationPath;
+        private final String presentationFileName;
+        private final String presentationBase64;
+
+        private ProofClipboardTransferable(
+                Path presentationPath,
+                String presentationFileName,
+                String presentationBase64
+        ) {
+            this.presentationPath = presentationPath;
+            this.presentationFileName = presentationFileName;
+            this.presentationBase64 = presentationBase64;
+        }
+
+        @Override
+        public DataFlavor[] getTransferDataFlavors() {
+            return SUPPORTED_FLAVORS.clone();
+        }
+
+        @Override
+        public boolean isDataFlavorSupported(DataFlavor flavor) {
+            return DataFlavor.javaFileListFlavor.equals(flavor) || DataFlavor.stringFlavor.equals(flavor);
+        }
+
+        @Override
+        public Object getTransferData(DataFlavor flavor) throws UnsupportedFlavorException {
+            if (DataFlavor.javaFileListFlavor.equals(flavor)) {
+                return List.of(presentationPath.toFile());
+            }
+            if (DataFlavor.stringFlavor.equals(flavor)) {
+                return TLSN_CLIPBOARD_PREFIX
+                        + "{\"fileName\":\""
+                        + escape(presentationFileName)
+                        + "\",\"mimeType\":\"application/octet-stream\",\"base64\":\""
+                        + presentationBase64
+                        + "\"}";
+            }
+            throw new UnsupportedFlavorException(flavor);
+        }
     }
 }

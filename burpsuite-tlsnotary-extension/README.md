@@ -21,8 +21,8 @@ docker compose up -d notary api
 
 Defaults:
 
-- API URL: `http://127.0.0.1:8080`
-- If `8080` is already in use, start Compose with `TLSN_API_PORT=<port>` and point the extension at that URL
+- API URL: `http://127.0.0.1:8090`
+- If `8090` is already in use, start Compose with `TLSN_API_PORT=<port>` and point the extension at that URL
 
 ## Build the extension
 
@@ -45,20 +45,21 @@ The build outputs:
 
 Open the `TLSNotary` tab in BurpSuite and set:
 
-- `API URL`: TLSNotary API endpoint, usually `http://127.0.0.1:8080`
+- `API URL`: TLSNotary API endpoint, usually `http://127.0.0.1:8090`
 - `Proof Output Directory`: where `.presentation.tlsn`, `.attestation.tlsn`, and `.secrets.tlsn` files should be saved
 - `Timeout`: maximum seconds to wait for proof generation
 - `Hide request by default`: optional default redaction behavior
 
-The notary host/port and CA bundle fields are available as optional overrides if you are not using the default dockerized setup.
+Leave the notary host/port and CA bundle overrides disabled for the standard docker-compose setup. If you enable them, those values are resolved inside the TLSNotary API container, not on the Burp host.
 
 ## Generate a proof
 
 1. Send a request in Repeater
 2. Right-click the request
 3. Choose one of the TLSNotary proof actions
-4. Wait for the dockerized API to generate the proof
-5. Review the saved artifact paths in the success dialog
+4. Make sure the selected request is HTTPS. Plain HTTP requests cannot be proven with TLSNotary.
+5. Wait for the dockerized API to generate the proof
+6. Review the saved artifact paths in the success dialog
 
 Saved files:
 

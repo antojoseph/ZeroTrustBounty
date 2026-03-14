@@ -24,12 +24,14 @@ public class TLSNotaryPanel extends JPanel {
 
     // Fields
     private JTextField txtApiUrl;
+    private JCheckBox  chkUseNotaryOverrides;
     private JTextField txtNotaryHost;
     private JTextField txtNotaryPort;
     private JTextField txtCaCertPath;
     private JTextField txtOutputDir;
     private JSpinner   spnTimeout;
     private JCheckBox  chkHideByDefault;
+    private JButton    btnBrowseCa;
     private JLabel     lblStatus;
 
     public TLSNotaryPanel(MontoyaApi api, TLSNotaryConfig config, Logging logging) {
@@ -93,24 +95,36 @@ public class TLSNotaryPanel extends JPanel {
         ng.fill = GridBagConstraints.HORIZONTAL;
 
         ng.gridx = 0; ng.gridy = 0; ng.weightx = 0;
+        ng.gridwidth = 3;
+        chkUseNotaryOverrides = new JCheckBox("Use custom notary / CA overrides (advanced)");
+        chkUseNotaryOverrides.addActionListener(e -> updateOverrideFieldState());
+        notaryPanel.add(chkUseNotaryOverrides, ng);
+
+        ng.gridy = 1;
+        notaryPanel.add(new JLabel(
+                "<html><small>Leave this disabled for the standard docker compose setup. " +
+                "These values are resolved from inside the TLSNotary API container.</small></html>"), ng);
+
+        ng.gridwidth = 1;
+        ng.gridx = 0; ng.gridy = 2; ng.weightx = 0;
         notaryPanel.add(new JLabel("Notary Host:"), ng);
         ng.gridx = 1; ng.weightx = 1.0;
         txtNotaryHost = new JTextField(20);
         notaryPanel.add(txtNotaryHost, ng);
 
-        ng.gridx = 0; ng.gridy = 1; ng.weightx = 0;
+        ng.gridx = 0; ng.gridy = 3; ng.weightx = 0;
         notaryPanel.add(new JLabel("Notary Port:"), ng);
         ng.gridx = 1; ng.weightx = 1.0;
         txtNotaryPort = new JTextField(6);
         notaryPanel.add(txtNotaryPort, ng);
 
-        ng.gridx = 0; ng.gridy = 2; ng.weightx = 0;
+        ng.gridx = 0; ng.gridy = 4; ng.weightx = 0;
         notaryPanel.add(new JLabel("CA Bundle Path:"), ng);
         ng.gridx = 1; ng.weightx = 1.0;
         txtCaCertPath = new JTextField(30);
         notaryPanel.add(txtCaCertPath, ng);
         ng.gridx = 2; ng.weightx = 0;
-        JButton btnBrowseCa = new JButton("Browse…");
+        btnBrowseCa = new JButton("Browse…");
         btnBrowseCa.addActionListener(e -> browseFile(txtCaCertPath, "Select CA Certificate (.crt/.pem)"));
         notaryPanel.add(btnBrowseCa, ng);
 
@@ -171,19 +185,25 @@ public class TLSNotaryPanel extends JPanel {
 
     private void loadValues() {
         txtApiUrl.setText(config.getApiUrl());
+        chkUseNotaryOverrides.setSelected(config.shouldUseNotaryOverrides());
         txtNotaryHost.setText(config.getNotaryHost());
         txtNotaryPort.setText(String.valueOf(config.getNotaryPort()));
         txtCaCertPath.setText(config.getCaCertPath());
         txtOutputDir.setText(config.getOutputDir());
         spnTimeout.setValue(config.getTimeoutSeconds());
         chkHideByDefault.setSelected(config.isHideRequestByDefault());
+        updateOverrideFieldState();
     }
 
     private void saveValues() {
         try {
             config.setApiUrl(txtApiUrl.getText().trim());
+            config.setUseNotaryOverrides(chkUseNotaryOverrides.isSelected());
             config.setNotaryHost(txtNotaryHost.getText().trim());
-            config.setNotaryPort(Integer.parseInt(txtNotaryPort.getText().trim()));
+            String notaryPortText = txtNotaryPort.getText().trim();
+            config.setNotaryPort(notaryPortText.isEmpty()
+                    ? TLSNotaryConfig.DEFAULT_NOTARY_PORT
+                    : Integer.parseInt(notaryPortText));
             config.setCaCertPath(txtCaCertPath.getText().trim());
             config.setOutputDir(txtOutputDir.getText().trim());
             config.setTimeoutSeconds((Integer) spnTimeout.getValue());
@@ -193,6 +213,14 @@ public class TLSNotaryPanel extends JPanel {
         } catch (NumberFormatException ex) {
             setStatus("Invalid port number.", Color.RED);
         }
+    }
+
+    private void updateOverrideFieldState() {
+        boolean enabled = chkUseNotaryOverrides.isSelected();
+        txtNotaryHost.setEnabled(enabled);
+        txtNotaryPort.setEnabled(enabled);
+        txtCaCertPath.setEnabled(enabled);
+        btnBrowseCa.setEnabled(enabled);
     }
 
     // ── Bridge connection test ────────────────────────────────────────────────

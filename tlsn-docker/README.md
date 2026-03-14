@@ -23,12 +23,12 @@ Defaults:
 
 - Notary inside Compose: `notary:7047`
 - Host notary port: `7048`
-- Host API port: `8080`
+- Host API port: `8090`
 
 Host ports are configurable:
 
 ```bash
-TLSN_NOTARY_PORT=7049 TLSN_API_PORT=8081 docker compose up -d notary api
+TLSN_NOTARY_PORT=7049 TLSN_API_PORT=8091 docker compose up -d notary api
 ```
 
 ## HTTP API
@@ -36,13 +36,13 @@ TLSN_NOTARY_PORT=7049 TLSN_API_PORT=8081 docker compose up -d notary api
 Health:
 
 ```bash
-curl http://127.0.0.1:8080/health
+curl http://127.0.0.1:8090/health
 ```
 
 Verify a presentation:
 
 ```bash
-curl -X POST http://127.0.0.1:8080/verify \
+curl -X POST http://127.0.0.1:8090/verify \
   -H 'Content-Type: application/json' \
   --data '{"presentation_b64":"<base64>","file_name":"proof.presentation.tlsn"}'
 ```
@@ -50,7 +50,7 @@ curl -X POST http://127.0.0.1:8080/verify \
 Generate a proof:
 
 ```bash
-curl -X POST http://127.0.0.1:8080/prove \
+curl -X POST http://127.0.0.1:8090/prove \
   -H 'Content-Type: application/json' \
   --data '{"target_host":"example.com","target_port":443,"request_b64":"<base64 raw HTTP request>","persist":true}'
 ```

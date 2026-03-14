@@ -18,7 +18,7 @@ services:
       [
         "tlsn-api",
         "--bind",
-        "0.0.0.0:8080",
+        "0.0.0.0:8090",
         "--notary-addr",
         "notary:7047",
         "--artifacts-dir",
@@ -27,7 +27,7 @@ services:
     environment:
       RUST_LOG: info
     ports:
-      - "${TLSN_API_PORT:-8080}:8080"
+      - "${TLSN_API_PORT:-8090}:8090"
     volumes:
       - ./artifacts:/artifacts
 

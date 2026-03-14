@@ -6,10 +6,13 @@ interface TlsProofViewerProps {
   serverName: string | null;
   sessionTime: string | null;
   sentData: string | null;
+  fullSentData?: string | null;
   recvData?: string | null;
   proofData?: string | null;
+  fullProofData?: string | null;
   proofFormat?: string | null;
   proofFileName?: string | null;
+  fullProofFileName?: string | null;
   hasSignature?: boolean;
 }
 
@@ -17,13 +20,17 @@ export default function TlsProofViewer({
   serverName,
   sessionTime,
   sentData,
+  fullSentData,
   recvData,
   proofData,
+  fullProofData,
   proofFormat,
   proofFileName,
+  fullProofFileName,
   hasSignature,
 }: TlsProofViewerProps) {
   const [showRaw, setShowRaw] = useState(false);
+  const effectiveSentData = fullSentData || sentData;
 
   const effectiveFormat = useMemo(() => {
     if (proofFormat) {
@@ -48,6 +55,25 @@ export default function TlsProofViewer({
     const link = document.createElement("a");
     link.href = url;
     link.download = proofFileName || "proof.presentation.tlsn";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const downloadFullProof = () => {
+    if (!fullProofData) {
+      return;
+    }
+
+    const bytes = Uint8Array.from(atob(fullProofData), (char) =>
+      char.charCodeAt(0)
+    );
+    const blob = new Blob([bytes], { type: "application/octet-stream" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = fullProofFileName || "proof.full.presentation.tlsn";
     document.body.appendChild(link);
     link.click();
     link.remove();
@@ -125,14 +151,16 @@ export default function TlsProofViewer({
           </div>
         </div>
 
-        {sentData && (
+        {effectiveSentData && (
           <div>
             <p className="text-gray-500 text-xs mb-1.5">
-              HTTP Request (from proof — redacted portions shown as X)
+              {fullSentData
+                ? "Full HTTP Request (revealed after bounty confirmation)"
+                : "HTTP Request (from proof — redacted portions shown as X)"}
             </p>
             <pre className="bg-gray-950 rounded-lg p-3 text-xs text-green-300 font-mono overflow-auto max-h-40 whitespace-pre-wrap border border-gray-800">
-              {sentData.substring(0, 500)}
-              {sentData.length > 500 ? "\n..." : ""}
+              {effectiveSentData.substring(0, 500)}
+              {effectiveSentData.length > 500 ? "\n..." : ""}
             </pre>
           </div>
         )}
@@ -172,24 +200,43 @@ export default function TlsProofViewer({
           </div>
         </div>
 
-        {proofData && effectiveFormat === "presentation_tlsn" && (
-          <div className="pt-1">
-            <button
-              onClick={downloadProof}
-              className="text-xs text-green-500 hover:text-green-300 flex items-center gap-1"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1M12 4v12m0 0l-4-4m4 4l4-4"
-                />
-              </svg>
-              Download attached presentation
-            </button>
+        {(proofData && effectiveFormat === "presentation_tlsn") || fullProofData ? (
+          <div className="pt-1 flex flex-wrap gap-4">
+            {proofData && effectiveFormat === "presentation_tlsn" && (
+              <button
+                onClick={downloadProof}
+                className="text-xs text-green-500 hover:text-green-300 flex items-center gap-1"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1M12 4v12m0 0l-4-4m4 4l4-4"
+                  />
+                </svg>
+                Download attached presentation
+              </button>
+            )}
+
+            {fullProofData && (
+              <button
+                onClick={downloadFullProof}
+                className="text-xs text-amber-400 hover:text-amber-200 flex items-center gap-1"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1M12 4v12m0 0l-4-4m4 4l4-4"
+                  />
+                </svg>
+                Download revealed full presentation
+              </button>
+            )}
           </div>
-        )}
+        ) : null}
 
         {proofData && effectiveFormat === "legacy_json" && (
           <div>

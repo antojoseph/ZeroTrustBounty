@@ -13,6 +13,7 @@ public class TLSNotaryConfig {
     // Preference keys
     private static final String KEY_API_URL         = "tlsnotary.api_url";
     private static final String KEY_BRIDGE_URL      = "tlsnotary.bridge_url";
+    private static final String KEY_USE_NOTARY_OVERRIDES = "tlsnotary.use_notary_overrides";
     private static final String KEY_NOTARY_HOST     = "tlsnotary.notary_host";
     private static final String KEY_NOTARY_PORT     = "tlsnotary.notary_port";
     private static final String KEY_CA_CERT_PATH    = "tlsnotary.ca_cert_path";
@@ -21,10 +22,11 @@ public class TLSNotaryConfig {
     private static final String KEY_TIMEOUT_SECONDS = "tlsnotary.timeout_seconds";
 
     // Defaults
-    public static final String  DEFAULT_API_URL         = "http://127.0.0.1:8080";
-    public static final String  DEFAULT_NOTARY_HOST     = "127.0.0.1";
+    public static final String  DEFAULT_API_URL         = "http://127.0.0.1:8090";
+    public static final boolean DEFAULT_USE_NOTARY_OVERRIDES = false;
+    public static final String  DEFAULT_NOTARY_HOST     = "";
     public static final int     DEFAULT_NOTARY_PORT     = 7047;
-    public static final String  DEFAULT_CA_CERT_PATH    = "./rootCA.crt";
+    public static final String  DEFAULT_CA_CERT_PATH    = "";
     public static final String  DEFAULT_OUTPUT_DIR      = System.getProperty("user.home") + "/tlsnotary-proofs";
     public static final boolean DEFAULT_HIDE_REQUEST    = false;
     public static final int     DEFAULT_TIMEOUT_SECONDS = 120;
@@ -61,6 +63,15 @@ public class TLSNotaryConfig {
     }
 
     // ── TLSNotary notary server ──────────────────────────────────────────────
+
+    public boolean shouldUseNotaryOverrides() {
+        Boolean v = prefs.getBoolean(KEY_USE_NOTARY_OVERRIDES);
+        return (v != null) ? v : DEFAULT_USE_NOTARY_OVERRIDES;
+    }
+
+    public void setUseNotaryOverrides(boolean useOverrides) {
+        prefs.setBoolean(KEY_USE_NOTARY_OVERRIDES, useOverrides);
+    }
 
     public String getNotaryHost() {
         String v = prefs.getString(KEY_NOTARY_HOST);

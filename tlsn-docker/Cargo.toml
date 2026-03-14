@@ -19,6 +19,7 @@ k256 = { version = "0.13", features = ["ecdsa"] }
 rustls-pemfile = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+sha2 = "0.10"
 tokio = { version = "1.38", features = ["fs", "macros", "net", "rt", "rt-multi-thread"] }
 tokio-util = { version = "0.7", features = ["compat", "io"] }
 tracing = "0.1"

@@ -88,11 +88,20 @@ model Report {
   tlsProof         String?  // Proof payload: legacy JSON or base64-encoded .presentation.tlsn
   tlsProofFormat   String?  // "legacy_json" | "presentation_tlsn"
   tlsProofFileName String?  // Original uploaded proof filename
+  tlsProofFingerprint String? // Stable fingerprint of the notary attestation for same-session matching
   tlsProofStatus   String?  // "pending" | "verified" | "invalid"
   tlsProofServerName String? // Verified server hostname from proof
   tlsProofTime     DateTime? // Time of the verified TLS session
   tlsProofSentData String?  // Redacted HTTP request from proof
   tlsProofRecvData String?  // Redacted HTTP response from proof
+  tlsProofHasHiddenComponents Boolean @default(false)
+  tlsProofRevealState String? // "awaiting_company_confirmation" | "ready_for_reporter_reveal" | "revealed"
+  tlsProofRevealUnlockedAt DateTime?
+  tlsProofFull String? // Companion unredacted presentation uploaded after company confirmation
+  tlsProofFullFileName String? // Original filename for the companion unredacted presentation
+  tlsProofFullFingerprint String? // Stable fingerprint of the companion presentation attestation
+  tlsProofFullSentData String? // Full request revealed after company confirms payout amount
+  tlsProofFullRevealedAt DateTime?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 

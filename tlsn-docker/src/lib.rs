@@ -9,6 +9,7 @@ use anyhow::{anyhow, Context, Result};
 use chrono::{DateTime, Utc};
 use futures::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use serde::Serialize;
+use sha2::{Digest, Sha256};
 use tlsn::{
     attestation::{
         presentation::{Presentation, PresentationOutput},
@@ -38,7 +39,7 @@ use tracing::info;
 
 pub const DEFAULT_NOTARY_BIND: &str = "0.0.0.0:7047";
 pub const DEFAULT_NOTARY_ADDR: &str = "127.0.0.1:7047";
-pub const DEFAULT_API_BIND: &str = "0.0.0.0:8080";
+pub const DEFAULT_API_BIND: &str = "0.0.0.0:8090";
 pub const DEFAULT_API_NOTARY_ADDR: &str = "notary:7047";
 pub const DEFAULT_USER_AGENT: &str = "tlsn-docker-tools/0.1";
 pub const DEFAULT_MAX_SENT_DATA: usize = 1 << 14;
@@ -50,6 +51,7 @@ pub const DEFAULT_HTTP_IO_TIMEOUT_SECS: u64 = 60;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct VerifiedPresentationSummary {
+    pub attestation_fingerprint: String,
     pub server_name: String,
     pub session_time: String,
     pub sent_data: String,
@@ -64,6 +66,7 @@ pub struct GeneratedProofArtifacts {
     pub attestation_bytes: Vec<u8>,
     pub secrets_bytes: Vec<u8>,
     pub presentation_bytes: Vec<u8>,
+    pub full_presentation_bytes: Option<Vec<u8>>,
     pub summary: VerifiedPresentationSummary,
 }
 
@@ -87,6 +90,7 @@ pub struct PersistedArtifactPaths {
     pub attestation: PathBuf,
     pub secrets: PathBuf,
     pub presentation: PathBuf,
+    pub full_presentation: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone)]
@@ -240,6 +244,7 @@ pub fn verify_presentation_bytes_with_roots(
 }
 
 pub fn summarize_presentation(output: PresentationOutput) -> Result<VerifiedPresentationSummary> {
+    let attestation_fingerprint = attestation_fingerprint(&output.attestation)?;
     let server_name = output
         .server_name
         .ok_or_else(|| anyhow!("presentation is missing a server name"))?;
@@ -252,6 +257,7 @@ pub fn summarize_presentation(output: PresentationOutput) -> Result<VerifiedPres
         .ok_or_else(|| anyhow!("presentation contained an invalid session timestamp"))?;
 
     Ok(VerifiedPresentationSummary {
+        attestation_fingerprint,
         server_name: server_name.to_string(),
         session_time: session_time.to_rfc3339(),
         sent_data: String::from_utf8_lossy(transcript.sent_unsafe()).into_owned(),
@@ -292,12 +298,28 @@ pub async fn generate_proof_artifacts(
     let secrets_bytes = bincode::serialize(&secrets)?;
     let presentation_bytes = bincode::serialize(&presentation)?;
     let summary = verify_presentation_bytes_with_roots(&presentation_bytes, &root_store)?;
+    let full_presentation_bytes = if reveals_full_request(
+        &sent_reveal_ranges,
+        secrets.transcript().sent().len(),
+    ) {
+        None
+    } else {
+        let full_presentation = build_presentation(
+            &attestation,
+            &secrets,
+            &[0..secrets.transcript().sent().len()],
+            &recv_reveal_ranges,
+        )?;
+
+        Some(bincode::serialize(&full_presentation)?)
+    };
 
     Ok(GeneratedProofArtifacts {
         stem,
         attestation_bytes,
         secrets_bytes,
         presentation_bytes,
+        full_presentation_bytes,
         summary,
     })
 }
@@ -311,15 +333,23 @@ pub async fn persist_generated_artifacts(
     let attestation = artifact_path(output_dir, &artifacts.stem, "attestation");
     let secrets = artifact_path(output_dir, &artifacts.stem, "secrets");
     let presentation = artifact_path(output_dir, &artifacts.stem, "presentation");
+    let full_presentation = artifacts
+        .full_presentation_bytes
+        .as_ref()
+        .map(|_| artifact_path(output_dir, &artifacts.stem, "full.presentation"));
 
     fs::write(&attestation, &artifacts.attestation_bytes).await?;
     fs::write(&secrets, &artifacts.secrets_bytes).await?;
     fs::write(&presentation, &artifacts.presentation_bytes).await?;
+    if let (Some(path), Some(bytes)) = (&full_presentation, &artifacts.full_presentation_bytes) {
+        fs::write(path, bytes).await?;
+    }
 
     Ok(PersistedArtifactPaths {
         attestation,
         secrets,
         presentation,
+        full_presentation,
     })
 }
 
@@ -761,6 +791,16 @@ fn invert_ranges(hidden_ranges: &[Range<usize>], max_len: usize) -> Vec<Range<us
     }
 
     revealed
+}
+
+fn reveals_full_request(ranges: &[Range<usize>], request_len: usize) -> bool {
+    ranges.len() == 1 && ranges[0].start == 0 && ranges[0].end == request_len
+}
+
+fn attestation_fingerprint(attestation: &Attestation) -> Result<String> {
+    let bytes = bincode::serialize(attestation)?;
+    let digest = Sha256::digest(bytes);
+    Ok(digest.iter().map(|byte| format!("{byte:02x}")).collect())
 }
 
 fn find_header_end(bytes: &[u8]) -> Option<usize> {

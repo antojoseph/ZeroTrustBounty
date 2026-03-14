@@ -6,6 +6,7 @@ import {
   type VerifiedTlsPresentation,
   verifyTlsPresentationWithApi,
 } from "@/lib/tlsProofApi";
+import { hasHiddenComponents } from "@/lib/tlsProofRedaction";
 
 export const runtime = "nodejs";
 
@@ -113,27 +114,50 @@ export async function POST(
     );
   }
 
+  const proofHasHiddenComponents = hasHiddenComponents(parsed.sentData);
+  const proofRevealState = proofHasHiddenComponents
+    ? "awaiting_company_confirmation"
+    : null;
+
   const updatedReport = await prisma.report.update({
     where: { id },
     data: {
       tlsProof: proofBuffer.toString("base64"),
       tlsProofFormat: "presentation_tlsn",
       tlsProofFileName: proofPart.name,
+      tlsProofFingerprint: parsed.attestationFingerprint,
       tlsProofStatus: "verified",
       tlsProofServerName: parsed.serverName,
       tlsProofTime: new Date(parsed.sessionTime),
       tlsProofSentData: parsed.sentData || null,
       tlsProofRecvData: parsed.recvData || null,
+      tlsProofHasHiddenComponents: proofHasHiddenComponents,
+      tlsProofRevealState: proofRevealState,
+      tlsProofRevealUnlockedAt: null,
+      tlsProofFull: null,
+      tlsProofFullFileName: null,
+      tlsProofFullFingerprint: null,
+      tlsProofFullSentData: null,
+      tlsProofFullRevealedAt: null,
     },
     select: {
       tlsProof: true,
       tlsProofFormat: true,
       tlsProofFileName: true,
+      tlsProofFingerprint: true,
       tlsProofStatus: true,
       tlsProofServerName: true,
       tlsProofTime: true,
       tlsProofSentData: true,
       tlsProofRecvData: true,
+      tlsProofHasHiddenComponents: true,
+      tlsProofRevealState: true,
+      tlsProofRevealUnlockedAt: true,
+      tlsProofFull: true,
+      tlsProofFullFileName: true,
+      tlsProofFullFingerprint: true,
+      tlsProofFullSentData: true,
+      tlsProofFullRevealedAt: true,
     },
   });
 
@@ -148,6 +172,15 @@ export async function POST(
       tlsProofTime: updatedReport.tlsProofTime?.toISOString() ?? null,
       tlsProofSentData: updatedReport.tlsProofSentData,
       tlsProofRecvData: updatedReport.tlsProofRecvData,
+      tlsProofHasHiddenComponents: updatedReport.tlsProofHasHiddenComponents,
+      tlsProofRevealState: updatedReport.tlsProofRevealState,
+      tlsProofRevealUnlockedAt:
+        updatedReport.tlsProofRevealUnlockedAt?.toISOString() ?? null,
+      tlsProofFull: updatedReport.tlsProofFull,
+      tlsProofFullFileName: updatedReport.tlsProofFullFileName,
+      tlsProofFullSentData: updatedReport.tlsProofFullSentData,
+      tlsProofFullRevealedAt:
+        updatedReport.tlsProofFullRevealedAt?.toISOString() ?? null,
     },
     summary: {
       serverName: parsed.serverName,
@@ -157,6 +190,7 @@ export async function POST(
       hasSignature: true,
       proofFormat: "presentation_tlsn",
       proofFileName: proofPart.name,
+      hasHiddenComponents: proofHasHiddenComponents,
     },
   });
 }
@@ -195,11 +229,20 @@ export async function DELETE(
       tlsProof: null,
       tlsProofFormat: null,
       tlsProofFileName: null,
+      tlsProofFingerprint: null,
       tlsProofStatus: null,
       tlsProofServerName: null,
       tlsProofTime: null,
       tlsProofSentData: null,
       tlsProofRecvData: null,
+      tlsProofHasHiddenComponents: false,
+      tlsProofRevealState: null,
+      tlsProofRevealUnlockedAt: null,
+      tlsProofFull: null,
+      tlsProofFullFileName: null,
+      tlsProofFullFingerprint: null,
+      tlsProofFullSentData: null,
+      tlsProofFullRevealedAt: null,
     },
   });
 

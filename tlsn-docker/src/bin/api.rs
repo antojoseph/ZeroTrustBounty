@@ -77,6 +77,7 @@ struct VerifyResponse {
     status: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
     file_name: Option<String>,
+    attestation_fingerprint: String,
     server_name: String,
     session_time: String,
     sent_data: String,
@@ -99,6 +100,8 @@ struct ProveRequest {
     server_name: Option<String>,
     #[serde(default, alias = "target_port")]
     server_port: Option<u16>,
+    #[serde(default)]
+    use_tls: Option<bool>,
     request_b64: String,
     #[serde(default)]
     output_stem: Option<String>,
@@ -140,6 +143,7 @@ enum RedactionRuleKindPayload {
 #[derive(Debug, Serialize)]
 struct ProveResponse {
     status: &'static str,
+    attestation_fingerprint: String,
     server_name: String,
     session_time: String,
     sent_data: String,
@@ -148,12 +152,18 @@ struct ProveResponse {
     recv_len: usize,
     presentation_file_name: String,
     presentation_b64: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    full_presentation_file_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    full_presentation_b64: Option<String>,
     attestation_file_name: String,
     attestation_b64: String,
     secrets_file_name: String,
     secrets_b64: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     persisted_presentation_path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    persisted_full_presentation_path: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     persisted_attestation_path: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -196,7 +206,7 @@ async fn main() -> Result<()> {
     let addr = listener.local_addr().unwrap_or_else(|_| {
         args.bind
             .parse::<SocketAddr>()
-            .unwrap_or_else(|_| SocketAddr::from(([0, 0, 0, 0], 8080)))
+            .unwrap_or_else(|_| SocketAddr::from(([0, 0, 0, 0], 8090)))
     });
     info!("tlsn-api listening on {}", addr);
     axum::serve(listener, app).await?;
@@ -230,6 +240,7 @@ async fn verify_handler(
     Ok(Json(VerifyResponse {
         status: "verified",
         file_name: request.file_name,
+        attestation_fingerprint: summary.attestation_fingerprint,
         server_name: summary.server_name,
         session_time: summary.session_time,
         sent_data: summary.sent_data,
@@ -266,6 +277,17 @@ async fn prove_handler(
         .filter(|value| !value.is_empty())
         .unwrap_or_else(|| connect_host.clone());
 
+    let server_port = request.server_port.unwrap_or(443);
+    if matches!(request.use_tls, Some(false)) {
+        return Err(ApiError::bad_request(
+            "TLSNotary requires HTTPS",
+            format!(
+                "TLSNotary only proves TLS connections. The requested target {}:{} was marked as non-TLS (use_tls=false). Choose an HTTPS request in Burp Repeater or remove the non-TLS override.",
+                connect_host, server_port
+            ),
+        ));
+    }
+
     let redaction_rules = request
         .redaction_rules
         .into_iter()
@@ -280,27 +302,30 @@ async fn prove_handler(
         })
         .collect::<Vec<_>>();
 
+    let requested_notary_addr = request
+        .notary_addr
+        .filter(|value| !value.trim().is_empty())
+        .or_else(|| {
+            match (
+                request
+                    .notary_host
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty()),
+                request.notary_port,
+            ) {
+                (Some(host), Some(port)) => Some(format!("{host}:{port}")),
+                _ => None,
+            }
+        });
+
     let config = GenerateProofConfig {
-        notary_addr: request
-            .notary_addr
-            .filter(|value| !value.trim().is_empty())
-            .or_else(|| {
-                match (
-                    request
-                        .notary_host
-                        .as_deref()
-                        .map(str::trim)
-                        .filter(|value| !value.is_empty()),
-                    request.notary_port,
-                ) {
-                    (Some(host), Some(port)) => Some(format!("{host}:{port}")),
-                    _ => None,
-                }
-            })
+        notary_addr: requested_notary_addr
+            .clone()
             .unwrap_or_else(|| state.notary_addr.clone()),
         server_host: connect_host,
         server_name: server_name.clone(),
-        server_port: request.server_port.unwrap_or(443),
+        server_port,
         request_bytes,
         output_stem: request.output_stem.clone(),
         max_sent_data: request.max_sent_data.unwrap_or(state.max_sent_data),
@@ -331,7 +356,19 @@ async fn prove_handler(
                 ),
             )
         })?
-        .map_err(|error| ApiError::bad_gateway("Proof generation failed", error.to_string()))?;
+        .map_err(|error| {
+            let details = match requested_notary_addr.as_deref() {
+                Some(notary_override) => format!(
+                    "{}. Requested notary override `{}` is resolved from inside the TLSNotary API container. For the default docker compose setup, omit notary_host/notary_port so the API uses `{}`.",
+                    error,
+                    notary_override,
+                    state.notary_addr
+                ),
+                None => error.to_string(),
+            };
+
+            ApiError::bad_gateway("Proof generation failed", details)
+        })?;
 
     let persisted = if request.persist.unwrap_or(false) {
         Some(
@@ -347,6 +384,7 @@ async fn prove_handler(
 
     Ok(Json(ProveResponse {
         status: "completed",
+        attestation_fingerprint: artifacts.summary.attestation_fingerprint.clone(),
         server_name: artifacts.summary.server_name.clone(),
         session_time: artifacts.summary.session_time.clone(),
         sent_data: artifacts.summary.sent_data.clone(),
@@ -355,6 +393,14 @@ async fn prove_handler(
         recv_len: artifacts.summary.recv_len,
         presentation_file_name: artifact_file_name(&artifacts.stem, "presentation"),
         presentation_b64: STANDARD.encode(&artifacts.presentation_bytes),
+        full_presentation_file_name: artifacts
+            .full_presentation_bytes
+            .as_ref()
+            .map(|_| artifact_file_name(&artifacts.stem, "full.presentation")),
+        full_presentation_b64: artifacts
+            .full_presentation_bytes
+            .as_ref()
+            .map(|bytes| STANDARD.encode(bytes)),
         attestation_file_name: artifact_file_name(&artifacts.stem, "attestation"),
         attestation_b64: STANDARD.encode(&artifacts.attestation_bytes),
         secrets_file_name: artifact_file_name(&artifacts.stem, "secrets"),
@@ -362,6 +408,12 @@ async fn prove_handler(
         persisted_presentation_path: persisted
             .as_ref()
             .map(|paths| paths.presentation.display().to_string()),
+        persisted_full_presentation_path: persisted.as_ref().and_then(|paths| {
+            paths
+                .full_presentation
+                .as_ref()
+                .map(|path| path.display().to_string())
+        }),
         persisted_attestation_path: persisted
             .as_ref()
             .map(|paths| paths.attestation.display().to_string()),
