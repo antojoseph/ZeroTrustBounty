@@ -61,30 +61,30 @@ public class TLSNotaryPanel extends JPanel {
         gc.fill = GridBagConstraints.HORIZONTAL;
 
         // TLSNotary API section
-        JPanel bridgePanel = new JPanel(new GridBagLayout());
-        bridgePanel.setBorder(new TitledBorder("TLSNotary API Service (dockerized companion)"));
+        JPanel apiPanel = new JPanel(new GridBagLayout());
+        apiPanel.setBorder(new TitledBorder("TLSNotary API Service (dockerized companion)"));
         GridBagConstraints bg = new GridBagConstraints();
         bg.insets = new Insets(3, 6, 3, 6);
         bg.fill = GridBagConstraints.HORIZONTAL;
 
         bg.gridx = 0; bg.gridy = 0; bg.weightx = 0;
-        bridgePanel.add(new JLabel("API URL:"), bg);
+        apiPanel.add(new JLabel("API URL:"), bg);
         bg.gridx = 1; bg.weightx = 1.0;
         txtApiUrl = new JTextField(30);
-        bridgePanel.add(txtApiUrl, bg);
+        apiPanel.add(txtApiUrl, bg);
         bg.gridx = 2; bg.weightx = 0;
         JButton btnTest = new JButton("Test Connection");
         btnTest.addActionListener(e -> testApiConnection());
-        bridgePanel.add(btnTest, bg);
+        apiPanel.add(btnTest, bg);
 
         bg.gridx = 0; bg.gridy = 1; bg.gridwidth = 3;
-        bridgePanel.add(new JLabel(
+        apiPanel.add(new JLabel(
                 "<html><small>Run the dockerized TLSNotary API from <code>../tlsn-docker</code> with:<br>" +
                 "<code>docker compose up -d notary api</code></small></html>"), bg);
         bg.gridwidth = 1;
 
         gc.gridx = 0; gc.gridy = 0; gc.gridwidth = 2; gc.weightx = 1.0;
-        form.add(bridgePanel, gc);
+        form.add(apiPanel, gc);
         gc.gridwidth = 1;
 
         // Notary server section
@@ -223,7 +223,7 @@ public class TLSNotaryPanel extends JPanel {
         btnBrowseCa.setEnabled(enabled);
     }
 
-    // ── Bridge connection test ────────────────────────────────────────────────
+    // ── API connection test ───────────────────────────────────────────────────
 
     private void testApiConnection() {
         setStatus("Testing connection…", Color.GRAY);
