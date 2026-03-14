@@ -11,6 +11,7 @@ import burp.api.montoya.persistence.PersistedObject;
 public class TLSNotaryConfig {
 
     // Preference keys
+    private static final String KEY_API_URL         = "tlsnotary.api_url";
     private static final String KEY_BRIDGE_URL      = "tlsnotary.bridge_url";
     private static final String KEY_NOTARY_HOST     = "tlsnotary.notary_host";
     private static final String KEY_NOTARY_PORT     = "tlsnotary.notary_port";
@@ -20,7 +21,7 @@ public class TLSNotaryConfig {
     private static final String KEY_TIMEOUT_SECONDS = "tlsnotary.timeout_seconds";
 
     // Defaults
-    public static final String  DEFAULT_BRIDGE_URL      = "http://127.0.0.1:7777";
+    public static final String  DEFAULT_API_URL         = "http://127.0.0.1:8080";
     public static final String  DEFAULT_NOTARY_HOST     = "127.0.0.1";
     public static final int     DEFAULT_NOTARY_PORT     = 7047;
     public static final String  DEFAULT_CA_CERT_PATH    = "./rootCA.crt";
@@ -34,15 +35,29 @@ public class TLSNotaryConfig {
         this.prefs = api.persistence().extensionData();
     }
 
-    // ── Bridge service (the Python helper that drives the Rust prover) ──────
+    // ── TLSNotary HTTP API (dockerized tlsn service) ────────────────────────
 
-    public String getBridgeUrl() {
-        String v = prefs.getString(KEY_BRIDGE_URL);
-        return (v != null && !v.isEmpty()) ? v : DEFAULT_BRIDGE_URL;
+    public String getApiUrl() {
+        String v = prefs.getString(KEY_API_URL);
+        if (v == null || v.isEmpty()) {
+            v = prefs.getString(KEY_BRIDGE_URL); // legacy preference key
+        }
+        return (v != null && !v.isEmpty()) ? v : DEFAULT_API_URL;
     }
 
+    public void setApiUrl(String url) {
+        prefs.setString(KEY_API_URL, url);
+        prefs.setString(KEY_BRIDGE_URL, url); // keep older installs working
+    }
+
+    @Deprecated
+    public String getBridgeUrl() {
+        return getApiUrl();
+    }
+
+    @Deprecated
     public void setBridgeUrl(String url) {
-        prefs.setString(KEY_BRIDGE_URL, url);
+        setApiUrl(url);
     }
 
     // ── TLSNotary notary server ──────────────────────────────────────────────

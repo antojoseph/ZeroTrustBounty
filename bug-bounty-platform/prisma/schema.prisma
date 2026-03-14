@@ -85,7 +85,9 @@ model Report {
   bountyAmount     Float?
   attachments      String   @default("[]")
   // TLSNotary proof fields
-  tlsProof         String?  // Full TLSNotary proof JSON
+  tlsProof         String?  // Proof payload: legacy JSON or base64-encoded .presentation.tlsn
+  tlsProofFormat   String?  // "legacy_json" | "presentation_tlsn"
+  tlsProofFileName String?  // Original uploaded proof filename
   tlsProofStatus   String?  // "pending" | "verified" | "invalid"
   tlsProofServerName String? // Verified server hostname from proof
   tlsProofTime     DateTime? // Time of the verified TLS session

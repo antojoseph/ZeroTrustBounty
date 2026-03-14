@@ -23,7 +23,7 @@ public class TLSNotaryPanel extends JPanel {
     private final Logging logging;
 
     // Fields
-    private JTextField txtBridgeUrl;
+    private JTextField txtApiUrl;
     private JTextField txtNotaryHost;
     private JTextField txtNotaryPort;
     private JTextField txtCaCertPath;
@@ -58,27 +58,27 @@ public class TLSNotaryPanel extends JPanel {
         gc.insets = new Insets(4, 4, 4, 4);
         gc.fill = GridBagConstraints.HORIZONTAL;
 
-        // Bridge service section
+        // TLSNotary API section
         JPanel bridgePanel = new JPanel(new GridBagLayout());
-        bridgePanel.setBorder(new TitledBorder("Bridge Service (local companion process)"));
+        bridgePanel.setBorder(new TitledBorder("TLSNotary API Service (dockerized companion)"));
         GridBagConstraints bg = new GridBagConstraints();
         bg.insets = new Insets(3, 6, 3, 6);
         bg.fill = GridBagConstraints.HORIZONTAL;
 
         bg.gridx = 0; bg.gridy = 0; bg.weightx = 0;
-        bridgePanel.add(new JLabel("Bridge URL:"), bg);
+        bridgePanel.add(new JLabel("API URL:"), bg);
         bg.gridx = 1; bg.weightx = 1.0;
-        txtBridgeUrl = new JTextField(30);
-        bridgePanel.add(txtBridgeUrl, bg);
+        txtApiUrl = new JTextField(30);
+        bridgePanel.add(txtApiUrl, bg);
         bg.gridx = 2; bg.weightx = 0;
         JButton btnTest = new JButton("Test Connection");
-        btnTest.addActionListener(e -> testBridgeConnection());
+        btnTest.addActionListener(e -> testApiConnection());
         bridgePanel.add(btnTest, bg);
 
         bg.gridx = 0; bg.gridy = 1; bg.gridwidth = 3;
         bridgePanel.add(new JLabel(
-                "<html><small>The bridge is a local Python/REST service that drives the Rust TLSNotary prover.<br>" +
-                "Start it with: <code>python bridge/tlsnotary_bridge.py</code></small></html>"), bg);
+                "<html><small>Run the dockerized TLSNotary API from <code>../tlsn-docker</code> with:<br>" +
+                "<code>docker compose up -d notary api</code></small></html>"), bg);
         bg.gridwidth = 1;
 
         gc.gridx = 0; gc.gridy = 0; gc.gridwidth = 2; gc.weightx = 1.0;
@@ -87,7 +87,7 @@ public class TLSNotaryPanel extends JPanel {
 
         // Notary server section
         JPanel notaryPanel = new JPanel(new GridBagLayout());
-        notaryPanel.setBorder(new TitledBorder("TLSNotary Notary Server"));
+        notaryPanel.setBorder(new TitledBorder("Optional Notary / CA Overrides"));
         GridBagConstraints ng = new GridBagConstraints();
         ng.insets = new Insets(3, 6, 3, 6);
         ng.fill = GridBagConstraints.HORIZONTAL;
@@ -105,7 +105,7 @@ public class TLSNotaryPanel extends JPanel {
         notaryPanel.add(txtNotaryPort, ng);
 
         ng.gridx = 0; ng.gridy = 2; ng.weightx = 0;
-        notaryPanel.add(new JLabel("CA Certificate Path:"), ng);
+        notaryPanel.add(new JLabel("CA Bundle Path:"), ng);
         ng.gridx = 1; ng.weightx = 1.0;
         txtCaCertPath = new JTextField(30);
         notaryPanel.add(txtCaCertPath, ng);
@@ -170,7 +170,7 @@ public class TLSNotaryPanel extends JPanel {
     // ── Load / save ───────────────────────────────────────────────────────────
 
     private void loadValues() {
-        txtBridgeUrl.setText(config.getBridgeUrl());
+        txtApiUrl.setText(config.getApiUrl());
         txtNotaryHost.setText(config.getNotaryHost());
         txtNotaryPort.setText(String.valueOf(config.getNotaryPort()));
         txtCaCertPath.setText(config.getCaCertPath());
@@ -181,7 +181,7 @@ public class TLSNotaryPanel extends JPanel {
 
     private void saveValues() {
         try {
-            config.setBridgeUrl(txtBridgeUrl.getText().trim());
+            config.setApiUrl(txtApiUrl.getText().trim());
             config.setNotaryHost(txtNotaryHost.getText().trim());
             config.setNotaryPort(Integer.parseInt(txtNotaryPort.getText().trim()));
             config.setCaCertPath(txtCaCertPath.getText().trim());
@@ -197,27 +197,27 @@ public class TLSNotaryPanel extends JPanel {
 
     // ── Bridge connection test ────────────────────────────────────────────────
 
-    private void testBridgeConnection() {
+    private void testApiConnection() {
         setStatus("Testing connection…", Color.GRAY);
         new Thread(() -> {
             try {
-                URL url = new URL(txtBridgeUrl.getText().trim() + "/health");
+                URL url = new URL(txtApiUrl.getText().trim() + "/health");
                 HttpURLConnection conn = (HttpURLConnection) url.openConnection();
                 conn.setConnectTimeout(5_000);
                 conn.setReadTimeout(5_000);
                 int code = conn.getResponseCode();
                 if (code == 200) {
                     SwingUtilities.invokeLater(() ->
-                            setStatus("Connected to bridge successfully.", new Color(0x2E7D32)));
+                            setStatus("Connected to TLSNotary API successfully.", new Color(0x2E7D32)));
                 } else {
                     SwingUtilities.invokeLater(() ->
-                            setStatus("Bridge responded with HTTP " + code, Color.ORANGE));
+                            setStatus("TLSNotary API responded with HTTP " + code, Color.ORANGE));
                 }
             } catch (IOException ex) {
                 SwingUtilities.invokeLater(() ->
-                        setStatus("Cannot reach bridge: " + ex.getMessage(), Color.RED));
+                        setStatus("Cannot reach TLSNotary API: " + ex.getMessage(), Color.RED));
             }
-        }, "TLSNotary-BridgeTest").start();
+        }, "TLSNotary-ApiTest").start();
     }
 
     // ── File choosers ─────────────────────────────────────────────────────────

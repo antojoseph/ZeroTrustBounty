@@ -1,0 +1,68 @@
+services:
+  notary:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: tlsn-docker-tools:alpha14
+    command: ["tlsn-notary-server", "--bind", "0.0.0.0:7047"]
+    environment:
+      RUST_LOG: info
+    ports:
+      - "${TLSN_NOTARY_PORT:-7048}:7047"
+
+  api:
+    image: tlsn-docker-tools:alpha14
+    depends_on:
+      - notary
+    command:
+      [
+        "tlsn-api",
+        "--bind",
+        "0.0.0.0:8080",
+        "--notary-addr",
+        "notary:7047",
+        "--artifacts-dir",
+        "/artifacts"
+      ]
+    environment:
+      RUST_LOG: info
+    ports:
+      - "${TLSN_API_PORT:-8080}:8080"
+    volumes:
+      - ./artifacts:/artifacts
+
+  prover:
+    image: tlsn-docker-tools:alpha14
+    depends_on:
+      - notary
+    command:
+      [
+        "tlsn-prove",
+        "--notary-addr",
+        "notary:7047",
+        "--server-host",
+        "example.com",
+        "--server-name",
+        "example.com",
+        "--path",
+        "/",
+        "--output-dir",
+        "/artifacts"
+      ]
+    volumes:
+      - ./artifacts:/artifacts
+    profiles:
+      - tools
+
+  verify:
+    image: tlsn-docker-tools:alpha14
+    command:
+      [
+        "tlsn-verify",
+        "--presentation",
+        "/artifacts/example_com.presentation.tlsn"
+      ]
+    volumes:
+      - ./artifacts:/artifacts
+    profiles:
+      - tools

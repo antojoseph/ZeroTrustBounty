@@ -6,8 +6,8 @@ package com.zerotrust.tlsnotary;
  *
  * TLSNotary's commitment scheme lets the prover selectively reveal only the
  * ranges it wants; any byte range NOT committed/revealed remains private.
- * The bridge service translates these rules into private ranges before calling
- * the prover.
+ * The TLSNotary API translates these rules into private transcript ranges
+ * before generating the proof.
  */
 public class RedactionRule {
 

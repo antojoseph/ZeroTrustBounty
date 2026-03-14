@@ -43,7 +43,7 @@ public class TLSNotaryExtension implements BurpExtension {
         api.userInterface().registerContextMenuItemsProvider(contextMenu);
 
         logging.logToOutput("Extension loaded successfully.");
-        logging.logToOutput("Configure the bridge service URL in the TLSNotary tab.");
+        logging.logToOutput("Configure the TLSNotary API URL in the TLSNotary tab.");
         logging.logToOutput("Right-click any request in Repeater to generate a proof.");
     }
 }

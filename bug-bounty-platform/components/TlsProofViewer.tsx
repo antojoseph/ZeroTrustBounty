@@ -1,12 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 interface TlsProofViewerProps {
   serverName: string | null;
   sessionTime: string | null;
   sentData: string | null;
-  proofJson?: string | null;
+  recvData?: string | null;
+  proofData?: string | null;
+  proofFormat?: string | null;
+  proofFileName?: string | null;
   hasSignature?: boolean;
 }
 
@@ -14,14 +17,45 @@ export default function TlsProofViewer({
   serverName,
   sessionTime,
   sentData,
-  proofJson,
+  recvData,
+  proofData,
+  proofFormat,
+  proofFileName,
   hasSignature,
 }: TlsProofViewerProps) {
   const [showRaw, setShowRaw] = useState(false);
 
+  const effectiveFormat = useMemo(() => {
+    if (proofFormat) {
+      return proofFormat;
+    }
+
+    if (proofData?.trim().startsWith("{")) {
+      return "legacy_json";
+    }
+
+    return proofData ? "presentation_tlsn" : null;
+  }, [proofData, proofFormat]);
+
+  const downloadProof = () => {
+    if (!proofData || effectiveFormat !== "presentation_tlsn") {
+      return;
+    }
+
+    const bytes = Uint8Array.from(atob(proofData), (char) => char.charCodeAt(0));
+    const blob = new Blob([bytes], { type: "application/octet-stream" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = proofFileName || "proof.presentation.tlsn";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="bg-green-950/20 border border-green-700/40 rounded-xl overflow-hidden">
-      {/* Header */}
       <div className="flex items-center gap-3 px-5 py-4 border-b border-green-700/30">
         <div className="flex items-center gap-2">
           <div className="w-7 h-7 bg-green-900/50 rounded-lg flex items-center justify-center">
@@ -42,7 +76,7 @@ export default function TlsProofViewer({
               TLSNotary Proof Verified
             </h3>
             <p className="text-xs text-green-600">
-              Cryptographically verifiable proof of concept
+              Cryptographically verified proof of concept
             </p>
           </div>
         </div>
@@ -59,7 +93,6 @@ export default function TlsProofViewer({
         )}
       </div>
 
-      {/* Proof details */}
       <div className="px-5 py-4 space-y-3">
         <div className="grid grid-cols-2 gap-4 text-sm">
           <div>
@@ -71,9 +104,23 @@ export default function TlsProofViewer({
           <div>
             <p className="text-gray-500 text-xs mb-0.5">Session Time</p>
             <p className="text-gray-200 text-xs">
-              {sessionTime
-                ? new Date(sessionTime).toLocaleString()
-                : "—"}
+              {sessionTime ? new Date(sessionTime).toLocaleString() : "—"}
+            </p>
+          </div>
+          <div>
+            <p className="text-gray-500 text-xs mb-0.5">Proof Format</p>
+            <p className="text-gray-200 text-xs">
+              {effectiveFormat === "presentation_tlsn"
+                ? "TLSNotary presentation (.tlsn)"
+                : effectiveFormat === "legacy_json"
+                  ? "Legacy JSON proof"
+                  : "—"}
+            </p>
+          </div>
+          <div>
+            <p className="text-gray-500 text-xs mb-0.5">Stored Filename</p>
+            <p className="text-gray-200 text-xs font-mono break-all">
+              {proofFileName || "—"}
             </p>
           </div>
         </div>
@@ -90,7 +137,19 @@ export default function TlsProofViewer({
           </div>
         )}
 
-        <div className="flex items-center gap-3 pt-1">
+        {recvData && (
+          <div>
+            <p className="text-gray-500 text-xs mb-1.5">
+              HTTP Response (from proof — redacted portions shown as X)
+            </p>
+            <pre className="bg-gray-950 rounded-lg p-3 text-xs text-blue-300 font-mono overflow-auto max-h-40 whitespace-pre-wrap border border-gray-800">
+              {recvData.substring(0, 500)}
+              {recvData.length > 500 ? "\n..." : ""}
+            </pre>
+          </div>
+        )}
+
+        <div className="flex flex-wrap items-center gap-3 pt-1">
           <div className="flex items-center gap-1.5 text-xs text-green-500">
             <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
               <path
@@ -109,11 +168,30 @@ export default function TlsProofViewer({
                 clipRule="evenodd"
               />
             </svg>
-            Transcript integrity protected by Merkle proofs
+            Presentation verified by the dockerized TLSNotary API
           </div>
         </div>
 
-        {proofJson && (
+        {proofData && effectiveFormat === "presentation_tlsn" && (
+          <div className="pt-1">
+            <button
+              onClick={downloadProof}
+              className="text-xs text-green-500 hover:text-green-300 flex items-center gap-1"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1M12 4v12m0 0l-4-4m4 4l4-4"
+                />
+              </svg>
+              Download attached presentation
+            </button>
+          </div>
+        )}
+
+        {proofData && effectiveFormat === "legacy_json" && (
           <div>
             <button
               onClick={() => setShowRaw(!showRaw)}
@@ -125,21 +203,25 @@ export default function TlsProofViewer({
                 viewBox="0 0 24 24"
                 stroke="currentColor"
               >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 5l7 7-7 7"
+                />
               </svg>
               {showRaw ? "Hide" : "Show"} raw proof JSON
             </button>
             {showRaw && (
               <pre className="mt-2 bg-gray-950 rounded-lg p-3 text-xs text-gray-400 font-mono overflow-auto max-h-48 whitespace-pre-wrap border border-gray-800">
-                {proofJson.substring(0, 2000)}
-                {proofJson.length > 2000 ? "\n... (truncated)" : ""}
+                {proofData.substring(0, 2000)}
+                {proofData.length > 2000 ? "\n... (truncated)" : ""}
               </pre>
             )}
           </div>
         )}
       </div>
 
-      {/* Footer */}
       <div className="px-5 py-3 bg-green-950/10 border-t border-green-700/20">
         <p className="text-xs text-green-700">
           This proof was generated using{" "}
@@ -151,9 +233,8 @@ export default function TlsProofViewer({
           >
             TLSNotary
           </a>
-          , an open protocol for verifiable TLS session attestation. The proof
-          cryptographically demonstrates that the reported HTTP exchange occurred
-          without requiring trust in the reporter.
+          . The platform now verifies uploaded presentations through the same
+          dockerized TLSNotary API used by the local tooling.
         </p>
       </div>
     </div>

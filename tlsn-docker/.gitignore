@@ -1,0 +1,4 @@
+/target/
+/artifacts/*
+!/artifacts/.gitignore
+.DS_Store
