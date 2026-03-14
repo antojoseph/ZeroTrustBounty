@@ -36,6 +36,7 @@ model Company {
   description String?
   logoUrl     String?
   verified    Boolean  @default(false)
+  availableFunds Float @default(0)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

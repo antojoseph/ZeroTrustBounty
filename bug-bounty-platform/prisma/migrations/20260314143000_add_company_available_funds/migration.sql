@@ -1,0 +1,1 @@
+ALTER TABLE "companies" ADD COLUMN "availableFunds" REAL NOT NULL DEFAULT 0;

@@ -23,7 +23,9 @@ export async function GET(
         select: { username: true, displayName: true },
       },
       program: {
-        include: { company: { select: { name: true, userId: true } } },
+        include: {
+          company: { select: { name: true, userId: true, availableFunds: true } },
+        },
       },
       comments: {
         include: {
@@ -88,38 +90,6 @@ export async function PATCH(
     if (body.triagerId) allowedFields.triagerId = body.triagerId;
     if (body.cvssScore !== undefined) allowedFields.cvssScore = parseFloat(body.cvssScore);
     if (body.cveId) allowedFields.cveId = body.cveId;
-
-    // Handle bounty payment
-    if (body.status === "resolved" && body.bountyAmount > 0) {
-      await prisma.payment.upsert({
-        where: { reportId: id },
-        create: {
-          reportId: id,
-          userId: report.reporterId,
-          amount: parseFloat(body.bountyAmount),
-          status: "paid",
-          paidAt: new Date(),
-        },
-        update: {
-          amount: parseFloat(body.bountyAmount),
-          status: "paid",
-          paidAt: new Date(),
-        },
-      });
-
-      // Update program total paid
-      await prisma.program.update({
-        where: { id: report.programId },
-        data: { totalPaid: { increment: parseFloat(body.bountyAmount) } },
-      });
-
-      // Update researcher reputation
-      const reputationGain = Math.floor(parseFloat(body.bountyAmount) / 100);
-      await prisma.user.update({
-        where: { id: report.reporterId },
-        data: { reputation: { increment: reputationGain } },
-      });
-    }
   }
 
   const updatedReport = await prisma.report.update({
@@ -143,6 +113,7 @@ export async function PATCH(
             select: {
               name: true,
               userId: true,
+              availableFunds: true,
             },
           },
         },

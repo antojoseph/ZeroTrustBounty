@@ -1,0 +1,1 @@
+export const DEFAULT_DUMMY_PAYOUT_AMOUNT = 500;

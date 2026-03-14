@@ -9,6 +9,7 @@ import TlsProofBadge from "@/components/TlsProofBadge";
 import TlsProofViewer from "@/components/TlsProofViewer";
 import TlsProofUploader from "@/components/TlsProofUploader";
 import TlsProofRevealUploader from "@/components/TlsProofRevealUploader";
+import PayReportButton from "@/components/PayReportButton";
 
 interface Report {
   id: string;
@@ -45,7 +46,7 @@ interface Report {
     id: string;
     name: string;
     slug: string;
-    company: { name: string; userId: string };
+    company: { name: string; userId: string; availableFunds: number };
   };
   comments: Comment[];
   payment: { amount: number; status: string; paidAt: string | null } | null;
@@ -208,6 +209,22 @@ export default function ReportDetailPage() {
   }) => {
     mergeReportUpdate(proofUpdate);
     setProofFlowError("");
+  };
+
+  const handleReportPaid = (reportUpdate: {
+    bountyAmount: number | null;
+    payment: { amount: number; status: string; paidAt: string | null } | null;
+    program: {
+      id: string;
+      name: string;
+      slug: string;
+      company: { name: string; userId: string; availableFunds: number };
+    };
+  }) => {
+    mergeReportUpdate(reportUpdate);
+    if (reportUpdate.bountyAmount) {
+      setBountyInput(String(reportUpdate.bountyAmount));
+    }
   };
 
   const unlockFullRequestReveal = async () => {
@@ -638,6 +655,17 @@ export default function ReportDetailPage() {
                     placeholder="0"
                   />
                 </div>
+                <div className="rounded-lg border border-gray-800 bg-gray-950/60 p-3 text-xs">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-gray-500">Organization Funds</span>
+                    <span className="font-semibold text-green-300">
+                      ${report.program.company.availableFunds.toLocaleString()}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-gray-500">
+                    Dummy balance available for instant bounty payouts.
+                  </p>
+                </div>
                 {report.tlsProofStatus === "verified" && (
                   <div className="text-xs bg-green-900/20 border border-green-700/40 rounded-lg p-2 text-green-400">
                     ✓ TLSNotary proof present — PoC is cryptographically verified
@@ -673,6 +701,16 @@ export default function ReportDetailPage() {
                     proof.
                   </div>
                 )}
+                <PayReportButton
+                  reportId={report.id}
+                  amount={report.payment?.amount ?? (
+                    Number.isFinite(Number(bountyInput)) && Number(bountyInput) > 0
+                      ? Number(bountyInput)
+                      : report.bountyAmount
+                  )}
+                  paymentStatus={report.payment?.status}
+                  onPaid={handleReportPaid}
+                />
                 <button
                   onClick={() => updateStatus(report.status)}
                   disabled={updatingStatus}

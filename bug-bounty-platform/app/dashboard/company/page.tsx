@@ -4,6 +4,7 @@ import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import SeverityBadge from "@/components/SeverityBadge";
 import StatusBadge from "@/components/StatusBadge";
+import PayReportButton from "@/components/PayReportButton";
 
 export default async function CompanyDashboard() {
   const session = await getSession();
@@ -35,6 +36,7 @@ export default async function CompanyDashboard() {
       include: {
         reporter: { select: { username: true, displayName: true } },
         program: { select: { name: true, slug: true } },
+        payment: { select: { status: true, amount: true } },
       },
     }),
     prisma.report.groupBy({
@@ -65,11 +67,12 @@ export default async function CompanyDashboard() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4 mb-8">
         {[
           { label: "Active Programs", value: company.programs.filter((p) => p.status === "active").length, icon: "📋" },
           { label: "Total Reports", value: totalReports, icon: "🐛" },
           { label: "New Reports", value: newReports, icon: "🆕" },
+          { label: "Available Funds", value: `$${company.availableFunds.toLocaleString()}`, icon: "🏦" },
           { label: "Total Paid Out", value: `$${totalPaid.toLocaleString()}`, icon: "💰" },
         ].map((stat) => (
           <div key={stat.label} className="bg-gray-900 border border-gray-800 rounded-xl p-5">
@@ -157,6 +160,7 @@ export default async function CompanyDashboard() {
                   <th className="text-left px-4 py-3 font-medium">Program</th>
                   <th className="text-left px-4 py-3 font-medium">Severity</th>
                   <th className="text-left px-4 py-3 font-medium">Status</th>
+                  <th className="text-left px-4 py-3 font-medium">Payout</th>
                   <th className="text-right px-6 py-3 font-medium">Date</th>
                 </tr>
               </thead>
@@ -190,6 +194,14 @@ export default async function CompanyDashboard() {
                     </td>
                     <td className="px-4 py-4">
                       <StatusBadge status={report.status} />
+                    </td>
+                    <td className="px-4 py-4">
+                      <PayReportButton
+                        reportId={report.id}
+                        amount={report.payment?.amount ?? report.bountyAmount}
+                        paymentStatus={report.payment?.status}
+                        compact
+                      />
                     </td>
                     <td className="px-6 py-4 text-right text-xs text-gray-500">
                       {new Date(report.createdAt).toLocaleDateString()}

@@ -97,7 +97,9 @@ async function main() {
   // Create companies
   const acme = await prisma.company.upsert({
     where: { userId: acmeUser.id },
-    update: {},
+    update: {
+      availableFunds: 100000,
+    },
     create: {
       userId: acmeUser.id,
       name: "Acme Corp",
@@ -105,12 +107,15 @@ async function main() {
       description:
         "Acme Corp is a leading SaaS provider with over 10 million users worldwide.",
       verified: true,
+      availableFunds: 100000,
     },
   });
 
   const techGiant = await prisma.company.upsert({
     where: { userId: techUser.id },
-    update: {},
+    update: {
+      availableFunds: 100000,
+    },
     create: {
       userId: techUser.id,
       name: "TechGiant Inc",
@@ -118,12 +123,15 @@ async function main() {
       description:
         "TechGiant builds developer tools trusted by 2 million engineers.",
       verified: true,
+      availableFunds: 100000,
     },
   });
 
   const cryptoVault = await prisma.company.upsert({
     where: { userId: cryptoUser.id },
-    update: {},
+    update: {
+      availableFunds: 100000,
+    },
     create: {
       userId: cryptoUser.id,
       name: "CryptoVault Finance",
@@ -131,6 +139,7 @@ async function main() {
       description:
         "CryptoVault is a regulated digital asset exchange with $5B+ in daily volume.",
       verified: false,
+      availableFunds: 100000,
     },
   });
 

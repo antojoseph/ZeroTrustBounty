@@ -142,32 +142,38 @@ function parseSessionTimestamp(value: Date | string | null | undefined) {
 export function validateFullPresentationReveal(
   input: ValidateFullPresentationRevealInput
 ) {
-  const requestValidation = validateFullRequestReveal(
-    input.redactedRequest,
-    input.fullRequest
-  );
-
-  if (!requestValidation.ok) {
-    return requestValidation;
-  }
-
-  const normalizedRedactedResponse = normalizeTlsProofText(
-    input.redactedResponse ?? ""
-  );
-  const normalizedFullResponse = normalizeTlsProofText(input.fullResponse ?? "");
-
-  if (!normalizedRedactedResponse) {
+  if (!input.redactedRequest) {
     return {
       ok: false as const,
-      error: "No verified TLSNotary response is attached to this report.",
+      error: "No verified TLSNotary request is attached to this report.",
     };
   }
 
-  if (normalizedRedactedResponse !== normalizedFullResponse) {
+  const normalizedRedactedRequest = normalizeTlsProofText(input.redactedRequest);
+  const hiddenRanges = getHiddenComponentRanges(normalizedRedactedRequest);
+
+  if (hiddenRanges.length === 0) {
     return {
       ok: false as const,
       error:
-        "The uploaded full presentation does not expose the same verified HTTP response as the original redacted proof.",
+        "This TLSNotary proof does not contain hidden request components.",
+    };
+  }
+
+  const normalizedFullRequest = normalizeTlsProofText(input.fullRequest ?? "");
+  if (!normalizedFullRequest || normalizedFullRequest.trim().length === 0) {
+    return {
+      ok: false as const,
+      error:
+        "The uploaded full presentation does not expose the full request.",
+    };
+  }
+
+  if (hasHiddenComponents(normalizedFullRequest)) {
+    return {
+      ok: false as const,
+      error:
+        "The uploaded full presentation still hides request components.",
     };
   }
 
@@ -207,5 +213,9 @@ export function validateFullPresentationReveal(
     };
   }
 
-  return requestValidation;
+  return {
+    ok: true as const,
+    normalizedFullRequest,
+    hiddenRanges,
+  };
 }
