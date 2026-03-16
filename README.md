@@ -1,7 +1,7 @@
 # ZeroTrustBounty
 
 ZeroTrustBounty is a local-first demo stack for submitting, verifying, and paying bug bounty reports backed by TLSNotary proofs.
-
+[![Youtube Video](https://raw.githubusercontent.com/antojoseph/ZeroTrustBounty/refs/heads/main/image.png)](https://youtu.be/9c2a7HFmrRM)
 The current implementation is built around three active pieces:
 
 - `tlsn-docker/`: a Dockerized TLSNotary notary server and HTTP API
