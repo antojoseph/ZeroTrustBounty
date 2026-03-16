@@ -8,6 +8,7 @@ WORKDIR /app
 
 COPY Cargo.toml ./
 COPY src ./src
+COPY tlsn-upstream ./tlsn-upstream
 
 RUN cargo build --release --bins
 

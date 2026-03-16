@@ -536,7 +536,12 @@ async fn notarize(
 fn normalize_http_request(raw_request: &[u8], server_name: &str) -> Result<Vec<u8>> {
     let parsed = parse_http_request(raw_request)?;
 
-    let mut headers = parsed.headers;
+    // Strip HTTP/2 pseudo-headers that Burp may include (e.g. :method, :path).
+    let mut headers: Vec<(String, String)> = parsed
+        .headers
+        .into_iter()
+        .filter(|(name, _)| !name.starts_with(':'))
+        .collect();
     let mut has_host = false;
     let mut has_connection = false;
     let mut has_accept_encoding = false;
@@ -568,8 +573,11 @@ fn normalize_http_request(raw_request: &[u8], server_name: &str) -> Result<Vec<u
         headers.push(("Connection".to_string(), "close".to_string()));
     }
 
+    // Force HTTP/1.1 since TLSNotary only speaks HTTP/1.1 over the wire.
+    // Burp may capture requests with "HTTP/2" in the request line.
+    let version = "HTTP/1.1";
     let mut normalized =
-        format!("{} {} {}\r\n", parsed.method, parsed.target, parsed.version).into_bytes();
+        format!("{} {} {}\r\n", parsed.method, parsed.target, version).into_bytes();
 
     for (name, value) in headers {
         normalized.extend_from_slice(name.as_bytes());

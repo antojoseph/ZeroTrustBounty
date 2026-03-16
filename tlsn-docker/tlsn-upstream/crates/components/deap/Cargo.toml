@@ -1,0 +1,26 @@
+[package]
+name = "tlsn-deap"
+version = "0.1.0-alpha.14"
+edition = "2021"
+
+[lints]
+workspace = true
+
+[dependencies]
+mpz-core = { workspace = true }
+mpz-common = { workspace = true }
+mpz-vm-core = { workspace = true }
+rangeset = { workspace = true }
+thiserror = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serio = { workspace = true }
+async-trait = { workspace = true }
+futures = { workspace = true }
+tokio = { workspace = true, features = ["sync"] }
+
+[dev-dependencies]
+mpz-circuits = { workspace = true, features = ["aes"] }
+mpz-common = { workspace = true, features = ["test-utils"] }
+mpz-ideal-vm = { workspace = true }
+
+tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread"] }

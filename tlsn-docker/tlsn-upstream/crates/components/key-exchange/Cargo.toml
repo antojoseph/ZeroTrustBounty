@@ -1,0 +1,47 @@
+[package]
+name = "tlsn-key-exchange"
+authors = ["TLSNotary Team"]
+description = "Implementation of the 3-party key-exchange protocol"
+keywords = ["tls", "mpc", "2pc", "pms", "key-exchange"]
+categories = ["cryptography"]
+license = "MIT OR Apache-2.0"
+version = "0.1.0-alpha.14"
+edition = "2021"
+
+[lints]
+workspace = true
+
+[lib]
+name = "key_exchange"
+
+[features]
+default = ["mock"]
+mock = ["mpz-share-conversion/test-utils", "mpz-common/ideal"]
+
+[dependencies]
+mpz-vm-core = { workspace = true }
+mpz-memory-core = { workspace = true }
+mpz-common = { workspace = true }
+mpz-fields = { workspace = true }
+mpz-share-conversion = { workspace = true }
+mpz-circuits = { workspace = true }
+mpz-core = { workspace = true }
+
+p256 = { workspace = true, features = ["ecdh", "serde"] }
+async-trait = { workspace = true }
+thiserror = { workspace = true }
+serio = { workspace = true }
+derive_builder = { workspace = true }
+tracing = { workspace = true }
+rand = { workspace = true }
+rand06-compat = { workspace = true }
+tokio = { workspace = true, features = ["sync"] }
+
+[dev-dependencies]
+mpz-ot = { workspace = true, features = ["ideal"] }
+mpz-garble = { workspace = true }
+mpz-ideal-vm = { workspace = true }
+
+rand_core = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread"] }
+rstest = { workspace = true }

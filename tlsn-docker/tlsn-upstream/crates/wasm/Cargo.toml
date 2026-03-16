@@ -1,0 +1,56 @@
+[package]
+name = "tlsn-wasm"
+version = "0.1.0-alpha.14"
+edition = "2021"
+repository = "https://github.com/tlsnotary/tlsn.git"
+description = "A core WebAssembly package for TLSNotary."
+license = "MIT OR Apache-2.0"
+keywords = ["tls", "tlsn", "tlsnotary"]
+homepage = "https://tlsnotary.org"
+
+[lints]
+workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = []
+test = []
+no-bundler = ["web-spawn/no-bundler"]
+
+[dependencies]
+tlsn-core = { workspace = true }
+tlsn = { workspace = true, features = ["web", "mozilla-certs"] }
+tlsn-server-fixture-certs = { workspace = true }
+tlsn-tls-client-async = { workspace = true }
+tlsn-tls-core = { workspace = true }
+
+async_io_stream = { workspace = true }
+bincode = { workspace = true }
+console_error_panic_hook = { version = "0.1" }
+enum-try-as-inner = { workspace = true }
+futures = { workspace = true }
+http-body-util = { version = "0.1" }
+hyper = { workspace = true, features = ["client", "http1"] }
+js-sys = { version = "0.3" }
+parking_lot = { version = "0.12", features = ["nightly"] }
+pin-project-lite = { workspace = true }
+rayon = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { version = "1.0" }
+time = { version = "=0.3.37", features = ["wasm-bindgen"] }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["time"] }
+tracing-web = { version = "0.1" }
+tsify-next = { version = "0.5", default-features = false, features = ["js"] }
+wasm-bindgen = { version = "0.2" }
+wasm-bindgen-futures = { version = "0.4" }
+web-spawn = { workspace = true }
+ws_stream_wasm = { workspace = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom = { version = "0.2", features = ["js"] }
+getrandom_03 = { package = "getrandom", version = "0.3", features = [
+    "wasm_js",
+] }

@@ -1,0 +1,39 @@
+[package]
+name = "tlsn-hmac-sha256"
+authors = ["TLSNotary Team"]
+description = "A 2PC implementation of TLS HMAC-SHA256 PRF"
+keywords = ["tls", "mpc", "2pc", "hmac", "sha256"]
+categories = ["cryptography"]
+license = "MIT OR Apache-2.0"
+version = "0.1.0-alpha.14"
+edition = "2021"
+
+[lints]
+workspace = true
+
+[lib]
+name = "hmac_sha256"
+
+[dependencies]
+mpz-vm-core = { workspace = true }
+mpz-core = { workspace = true }
+mpz-circuits = { workspace = true }
+mpz-hash = { workspace = true }
+
+sha2 = { workspace = true, features = ["compress"] }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+mpz-common = { workspace = true, features = ["test-utils"] }
+mpz-ideal-vm = { workspace = true }
+
+criterion = { workspace = true, features = ["async_tokio"] }
+tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread"] }
+rand = { workspace = true }
+hex = { workspace = true }
+ring = { workspace = true }
+
+[[bench]]
+name = "prf"
+harness = false

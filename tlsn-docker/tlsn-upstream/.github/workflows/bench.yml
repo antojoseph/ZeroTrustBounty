@@ -1,0 +1,41 @@
+name: Run Benchmarks (Native or Browser)
+on:
+  # manual trigger
+  workflow_dispatch:
+    inputs:
+      bench_type:
+        description: "Specify the benchmark type (native or browser)"
+        required: true
+        default: "native"
+        type: choice
+        options:
+          - native
+          - browser
+
+jobs:
+  run-benchmarks:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Build Docker Image
+      run: |
+        docker build -t tlsn-bench . -f ./crates/harness/harness.Dockerfile
+
+    - name: Run Benchmarks
+      run: |
+        docker run --privileged -v ./crates/harness/:/benches tlsn-bench bash -c "runner setup; runner --target ${{ github.event.inputs.bench_type }} bench"
+
+    - name: Plot Benchmarks
+      run: |
+        docker run -v ./crates/harness/:/benches tlsn-bench bash -c "tlsn-harness-plot /benches/bench.toml /benches/metrics.csv --min-max-band --prover-kind  ${{ github.event.inputs.bench_type }}"
+    - name: Upload graphs
+      uses: actions/upload-artifact@v4
+      with:
+        name: benchmark_graphs
+        path: |
+          ./crates/harness/metrics.csv
+          ./crates/harness/bench.toml
+          ./crates/harness/runtime_vs_latency.html
+          ./crates/harness/runtime_vs_bandwidth.html

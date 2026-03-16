@@ -1,0 +1,202 @@
+name: ci
+
+on:
+  push:
+    branches:
+      - dev
+    tags:
+      - "[v]?[0-9]+.[0-9]+.[0-9]+*"
+  pull_request:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_REGISTRIES_CRATES_IO_PROTOCOL: sparse
+  # We need a higher number of parallel rayon tasks than the default (which is 4)
+  # in order to prevent a deadlock, c.f.
+  #   - https://github.com/tlsnotary/tlsn/issues/548
+  #   - https://github.com/privacy-ethereum/mpz/issues/178
+  # 32 seems to be big enough for the foreseeable future
+  RAYON_NUM_THREADS: 32
+  RUST_VERSION: 1.92.0
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+jobs:
+  clippy:
+    name: Clippy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          components: clippy
+
+      - name: Use caching
+        uses: Swatinem/rust-cache@v2.7.7
+
+      - name: Clippy
+        run: cargo clippy --keep-going --all-features --all-targets --locked
+
+  fmt:
+    name: Check formatting
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+        # We use nightly to support `imports_granularity` feature
+      - name: Install nightly rust toolchain with rustfmt
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: nightly
+          components: rustfmt
+
+      - name: Use caching
+        uses: Swatinem/rust-cache@v2.7.7
+
+      - name: Check formatting
+        run: cargo +nightly fmt --check --all
+
+  build-and-test:
+    name: Build and test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+
+      - name: Use caching
+        uses: Swatinem/rust-cache@v2.7.7
+
+      - name: Build
+        run: cargo build --all-targets --locked
+
+      - name: Test
+        run: cargo test --no-fail-fast --locked
+
+  wasm:
+    name: Build and Test wasm
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+          toolchain: ${{ env.RUST_VERSION }}
+
+      - name: Install nightly rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown,x86_64-unknown-linux-gnu
+          toolchain: nightly
+          components: rust-src
+
+      - name: Install chromedriver
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y chromium-chromedriver
+
+      - name: Install wasm-pack
+        # we install a specific version which supports custom profiles
+        run: cargo install --git https://github.com/rustwasm/wasm-pack.git --rev 32e52ca
+
+      - name: Use caching
+        uses: Swatinem/rust-cache@v2.7.7
+
+      - name: Build harness
+        working-directory: crates/harness
+        run: ./build.sh
+
+      - name: Run tests
+        working-directory: crates/harness
+        run: |
+          ./bin/runner setup
+          ./bin/runner --target browser test
+
+      - name: Run build
+        working-directory: crates/wasm
+        run: ./build.sh
+
+      - name: Dry Run NPM Publish
+        working-directory: crates/wasm/pkg
+        run: npm publish --dry-run
+
+      - name: Save tlsn-wasm package for tagged builds
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ github.ref_name }}-tlsn-wasm-pkg
+          path: ./crates/wasm/pkg
+          if-no-files-found: error
+
+  tests-integration:
+    name: Run tests release build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+
+      - name: Use caching
+        uses: Swatinem/rust-cache@v2.7.7
+
+      - name: Run integration tests
+        run: cargo test  --locked --profile tests-integration --workspace --exclude tlsn-tls-client --exclude tlsn-tls-core --no-fail-fast -- --include-ignored
+
+  coverage:
+    runs-on: ubuntu-latest
+    env:
+      CARGO_TERM_COLOR: always
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+      - name: Generate code coverage
+        run: cargo llvm-cov --all-features --workspace  --locked --lcov --output-path lcov.info
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: lcov.info
+          fail_ci_if_error: true
+
+  create-release-draft:
+    name: Create Release Draft
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    if: startsWith(github.ref, 'refs/tags/v') && contains(github.ref, '.')
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Create GitHub Release Draft
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          tag_name: ${{ github.ref_name }}
+          prerelease: true
+          generate_release_notes: true
