@@ -10,7 +10,7 @@ The current implementation is built around three active pieces:
 
 The old Lit-based prototype is no longer part of the active product flow and has been removed from this repo.
 
-## What Works Today
+## Architecture
 
 The end-to-end flow implemented in this repository is:
 
@@ -29,7 +29,7 @@ The end-to-end flow implemented in this repository is:
 9. The webapp verifies that the full proof comes from the same notarized TLS session by matching the attestation fingerprint, server name, and session time.
 10. The company can record a dummy payout directly from the report view or company dashboard.
 
-There is no blockchain payment rail in the current code. Payouts are stored in SQLite as dummy `Payment` rows, company balances are decremented in the database, and the researcher reputation score is increased.
+
 
 ## Repository Layout
 
